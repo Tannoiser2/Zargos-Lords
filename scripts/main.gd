@@ -530,15 +530,20 @@ func _try_move_selected(destination: Vector2i) -> void:
 	if occupant and (selected.guard_target or selected.guard_unit):
 		_show_event("Non puoi separare una scorta e formarne un'altra nella stessa mossa.")
 		return
+	var origin := selected.hex
 	_detach_escort(selected)
 	selected.hex = destination
 	selected.position = hex_to_world(destination) + Vector3(0, 0.18, 0)
 	selected.moved = true
+	_register_facing_and_charge(selected, origin, destination)
 	if occupant:
 		_form_escort(selected, occupant)
 	movement_overlay.mesh = null
 	var terrain_name: String = String(ZargosRules.Terrain.keys()[board_data.terrain_at(destination)]).capitalize()
-	_show_event("%s spostato • costo %d/%d • terreno %s%s." % [selected.unit_type, movement_cost, selected.movement, terrain_name, " • scorta formata" if occupant else ""])
+	var movement_note := " • scorta formata" if occupant else ""
+	if selected.charge_ready:
+		movement_note += " • carica rettilinea pronta"
+	_show_event("%s spostato • costo %d/%d • terreno %s%s." % [selected.unit_type, movement_cost, selected.movement, terrain_name, movement_note])
 
 func _unit_at(hex: Vector2i) -> CardboardUnit:
 	var units := _units_at(hex)
@@ -718,6 +723,49 @@ func _movement_blocked(hex: Vector2i, moving_faction: StringName, flying: bool) 
 		return false
 	# Amici e alleati possono essere attraversati; gli Alati sorvolano anche i nemici.
 	return unit.faction != moving_faction and not flying
+
+func _register_facing_and_charge(unit: CardboardUnit, origin: Vector2i, destination: Vector2i) -> void:
+	unit.charge_ready = false
+	unit.charge_direction = -1
+	var direction := _straight_direction(origin, destination)
+	if direction < 0:
+		return
+	unit.facing_direction = direction
+	if unit.faction == &"Cavalieri" and unit.unit_type == &"Signore" and _straight_path_is_clear(origin, destination, direction, unit.faction):
+		unit.charge_ready = true
+		unit.charge_direction = direction
+
+func _straight_direction(origin: Vector2i, destination: Vector2i) -> int:
+	var distance := ZargosRules.hex_distance(origin, destination)
+	if distance <= 0:
+		return -1
+	var neighbors := _hex_neighbors(origin)
+	for direction in range(neighbors.size()):
+		var current := origin
+		var aligned := true
+		for step in range(distance):
+			var next_options := _hex_neighbors(current)
+			# La stessa direzione geometrica viene ritrovata scegliendo il vicino
+			# che continua ad avvicinarsi alla destinazione sulla medesima linea.
+			var next := next_options[direction]
+			if ZargosRules.hex_distance(next, destination) != distance - step - 1:
+				aligned = false
+				break
+			current = next
+		if aligned and current == destination:
+			return direction
+	return -1
+
+func _straight_path_is_clear(origin: Vector2i, destination: Vector2i, direction: int, faction: StringName) -> bool:
+	var current := origin
+	while current != destination:
+		current = _hex_neighbors(current)[direction]
+		if current != destination and _movement_blocked(current, faction, false):
+			return false
+		var terrain_type := board_data.terrain_at(current)
+		if terrain_type in [ZargosRules.Terrain.SEA, ZargosRules.Terrain.VOID, ZargosRules.Terrain.MOUNTAIN]:
+			return false
+	return true
 
 func _in_enemy_zone_of_influence(hex: Vector2i, moving_faction: StringName) -> bool:
 	for neighbor in _hex_neighbors(hex):
@@ -916,10 +964,11 @@ func _resolve_attack(attacker: CardboardUnit, defender: CardboardUnit) -> void:
 		return
 	attacker.acted = true
 	var die := rng.randi_range(1, 6)
-	var attacker_strength := _effective_combat(attacker)
+	var charge_bonus := _charge_bonus(attacker, defender)
+	var attacker_strength := _effective_combat(attacker) + charge_bonus
 	var defender_strength := _effective_combat(defender) + board_data.defense_bonus_at(defender.hex)
 	var result := ZargosRules.resolve_combat(attacker_strength, defender_strength, die)
-	_show_event("Dado %d • %s %d contro %s %d: %s [%s]" % [die, attacker.unit_type, attacker_strength, defender.unit_type, defender_strength, result.text, result.result])
+	_show_event("Dado %d • %s %d%s contro %s %d: %s [%s]" % [die, attacker.unit_type, attacker_strength, " (carica +%d)" % charge_bonus if charge_bonus else "", defender.unit_type, defender_strength, result.text, result.result])
 	match result.result:
 		"DE": _eliminate_unit(defender, attacker)
 		"AE": _eliminate_unit(attacker, defender)
@@ -940,7 +989,7 @@ func _resolve_group_attack(defender: CardboardUnit) -> void:
 			_show_event("Tutti gli attaccanti devono essere disponibili e adiacenti allo stesso difensore.")
 			return
 	var attackers := combat_group.duplicate()
-	var attack_strength := _group_base_strength()
+	var attack_strength := _group_attack_strength(defender)
 	var defense_strength := _effective_combat(defender) + board_data.defense_bonus_at(defender.hex)
 	var die := rng.randi_range(1, 6)
 	var result := ZargosRules.resolve_combat(attack_strength, defense_strength, die)
@@ -1008,6 +1057,23 @@ func _effective_combat(unit: CardboardUnit) -> int:
 		if supporter and supporter.faction == unit.faction and supporter.unit_type == &"Mago":
 			strength += 2
 	return strength
+
+func _group_attack_strength(defender: CardboardUnit) -> int:
+	var total := 0
+	for attacker in combat_group:
+		total += _effective_combat(attacker) + _charge_bonus(attacker, defender)
+	return total
+
+func _charge_bonus(attacker: CardboardUnit, defender: CardboardUnit) -> int:
+	if not attacker.charge_ready or attacker.faction != &"Cavalieri" or attacker.unit_type != &"Signore":
+		return 0
+	if ZargosRules.hex_distance(attacker.hex, defender.hex) != 1:
+		return 0
+	var impact_direction := _straight_direction(attacker.hex, defender.hex)
+	if impact_direction != attacker.charge_direction:
+		return 0
+	var frontal := defender.facing_direction == (attacker.charge_direction + 3) % 6
+	return 3 if frontal else 1
 
 func _retreat_unit(unit: CardboardUnit, threat: CardboardUnit, distance: int) -> void:
 	var current := unit.hex
@@ -1098,7 +1164,9 @@ func _run_ai_turn() -> void:
 	for unit in _units_for_faction(faction):
 		var destination := _best_ai_destination(unit)
 		if destination != unit.hex:
+			var origin := unit.hex
 			unit.hex = destination
+			_register_facing_and_charge(unit, origin, destination)
 			var tween := create_tween()
 			tween.tween_property(unit, "position", hex_to_world(destination) + Vector3(0, 0.18, 0), 0.18)
 			unit.moved = true

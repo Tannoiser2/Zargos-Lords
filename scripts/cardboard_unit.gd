@@ -16,6 +16,9 @@ var escort_changed := false
 var vanished := false
 var vanished_month := 0
 var vanish_origin := Vector2i.ZERO
+var facing_direction := -1
+var charge_ready := false
+var charge_direction := -1
 
 const COUNTER_TEXTURES := {
 	&"Cavalieri": {
@@ -97,4 +100,6 @@ func reset_turn() -> void:
 	acted = false
 	ranged_hits = 0
 	escort_changed = false
+	charge_ready = false
+	charge_direction = -1
 
