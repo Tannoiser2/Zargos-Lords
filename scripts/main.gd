@@ -289,7 +289,7 @@ func _pick_at(screen_position: Vector2) -> void:
 		else:
 			_select_unit(collider)
 	elif collider is CardboardCity:
-		_try_enter_city(collider)
+		_handle_city_click(collider)
 	elif collider.has_meta("is_board") and selected:
 		_try_move_selected(world_to_hex(hit.position))
 
@@ -327,13 +327,24 @@ func _try_move_selected(destination: Vector2i) -> void:
 
 func _unit_at(hex: Vector2i) -> CardboardUnit:
 	for child in get_children():
-		if child is CardboardUnit and child.hex == hex:
+		if child is CardboardUnit and child.visible and child.hex == hex:
 			return child
 	return null
 
+func _handle_city_click(city: CardboardCity) -> void:
+	if state.phase == ZargosRules.Phase.COMBAT and selected and city.faction != selected.faction:
+		_resolve_siege(selected, city)
+		return
+	if state.phase != ZargosRules.Phase.MOVEMENT:
+		_show_event("Le città si gestiscono durante Movimento o Combattimento.")
+		return
+	if not selected:
+		_release_garrison(city)
+		return
+	_try_enter_city(city)
+
 func _try_enter_city(city: CardboardCity) -> void:
-	if not selected or state.phase != ZargosRules.Phase.MOVEMENT:
-		_show_event("Seleziona una tua pedina durante la fase Movimento per entrare in città.")
+	if not selected:
 		return
 	if selected.faction != state.active_faction() or selected.moved:
 		_show_event("La pedina selezionata non può muovere ora.")
@@ -342,19 +353,84 @@ func _try_enter_city(city: CardboardCity) -> void:
 	if distance > selected.movement:
 		_show_event("La città è oltre il movimento massimo della pedina.")
 		return
-	if _unit_at(city.hex):
+	if _unit_at(city.hex) and _unit_at(city.hex) != selected:
 		_show_event("La città è già occupata da una pedina.")
 		return
 	var old_owner := city.faction
+	if old_owner != selected.faction and not city.garrison.is_empty():
+		_show_event("La città è difesa: devi assediarla durante il Combattimento.")
+		return
 	selected.hex = city.hex
-	selected.position = hex_to_world(city.hex) + Vector3(0, 0.34, 0)
 	selected.moved = true
 	if old_owner != selected.faction:
+		selected.position = hex_to_world(city.hex) + Vector3(0, 0.34, 0)
 		city.change_owner(selected.faction)
 		state.capture_city(old_owner, selected.faction)
 		_show_event("I %s conquistano una città dei %s." % [selected.faction, old_owner])
 	else:
-		_show_event("%s entra in una città amica." % selected.unit_type)
+		if city.add_to_garrison(selected):
+			_show_event("%s entra nella guarnigione (%d/4)." % [selected.unit_type, city.garrison.size()])
+			_select_unit(null)
+		else:
+			selected.position = hex_to_world(city.hex) + Vector3(0, 0.34, 0)
+			_show_event("Guarnigione completa: la pedina resta sopra la città.")
+
+func _release_garrison(city: CardboardCity) -> void:
+	if city.faction != state.active_faction():
+		_show_event("Puoi gestire solo le città del popolo attivo.")
+		return
+	var unit := city.release_first()
+	if not unit:
+		_show_event("La città non contiene una guarnigione.")
+		return
+	var destinations := _hex_neighbors(city.hex).filter(func(hex: Vector2i): return _is_on_board(hex) and not _unit_at(hex))
+	if destinations.is_empty():
+		city.add_to_garrison(unit)
+		_show_event("Nessun esagono libero per far uscire la guarnigione.")
+		return
+	unit.hex = destinations[0]
+	unit.position = hex_to_world(unit.hex) + Vector3(0, 0.18, 0)
+	unit.moved = true
+	_show_event("%s esce dalla guarnigione." % unit.unit_type)
+
+func _resolve_siege(attacker: CardboardUnit, city: CardboardCity) -> void:
+	if attacker.faction != state.active_faction() or attacker.acted:
+		_show_event("L'attaccante non può agire ora.")
+		return
+	if ZargosRules.hex_distance(attacker.hex, city.hex) != 1:
+		_show_event("Per assediare una città bisogna essere adiacenti.")
+		return
+	if city.garrison.is_empty():
+		var old_owner := city.faction
+		city.change_owner(attacker.faction)
+		state.capture_city(old_owner, attacker.faction)
+		_show_event("Città indifesa conquistata dai %s." % attacker.faction)
+		return
+	attacker.acted = true
+	var defense := city.garrison_strength()
+	var die := rng.randi_range(1, 6)
+	var result := ZargosRules.resolve_combat(attacker.combat, defense, die)
+	var code: String = result.result
+	if code in ["D1", "D3"]:
+		code = "A1"
+	_show_event("Assedio • dado %d • %d contro guarnigione %d: %s" % [die, attacker.combat, defense, code])
+	if code in ["D5", "DE"]:
+		for defeated in city.clear_garrison():
+			_eliminate_unit(defeated)
+		var old_owner := city.faction
+		city.change_owner(attacker.faction)
+		state.capture_city(old_owner, attacker.faction)
+		_show_event(event_label.text + " • città conquistata")
+	elif code == "AE":
+		_eliminate_unit(attacker)
+	elif code.begins_with("A"):
+		_retreat_unit(attacker, _city_threat_proxy(city), int(code.right(1)))
+
+func _city_threat_proxy(city: CardboardCity) -> CardboardUnit:
+	# Unità temporanea non inserita nell'albero: serve solo come origine geometrica della fuga.
+	var proxy := CardboardUnit.new()
+	proxy.hex = city.hex
+	return proxy
 
 func _on_next_phase() -> void:
 	var old_faction := state.active_faction()

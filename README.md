@@ -27,6 +27,8 @@ Il repository contiene per ora il materiale di riferimento del gioco base:
 - frecce, fiamme e visioni selezionando direttamente il bersaglio;
 - accumulo dei colpi a distanza sullo stesso bersaglio nel turno;
 - città tridimensionali, conquista e conteggio per fazione;
+- guarnigioni nascoste fino a quattro unità e uscita dalla città;
+- assedio con forza combinata della guarnigione e risultati speciali per le città;
 - determinazione del vincitore in base alle città controllate al 25º mese;
 - test automatici delle regole e degli esempi del manuale.
 
