@@ -105,7 +105,7 @@ func _init() -> void:
 
 func _legacy_coordinate(old_hex: Vector2i) -> Vector2i:
 	# Migrazione provvisoria delle annotazioni della scansione 36x24 sulla
-	# griglia 80x61 ricavata dal modulo Tabletop Simulator.
+	# griglia 67x52 misurata direttamente sulla bitmap Mappa 2.png.
 	return Vector2i(
 		roundi(float(old_hex.x) * float(ZargosRules.BOARD_COLUMNS - 1) / 35.0),
 		roundi(float(old_hex.y) * float(ZargosRules.BOARD_ROWS - 1) / 23.0)

@@ -44,7 +44,7 @@ Il repository contiene per ora il materiale di riferimento del gioco base:
 - guarnigioni nascoste fino a quattro unità e uscita dalla città;
 - assedio con più attaccanti, numero minimo richiesto, forza combinata della guarnigione e risultati speciali per le città;
 - percorso esagonale con costi di boschi, montagne, mari, ponti e gorghi;
-- reticolo TTS 80 × 61 con esagoni a punta in alto, passo e offset ricavati dal modulo `2401055803`;
+- reticolo 67 × 52 con esagoni a punta in alto, passo e offset calibrati direttamente sulle linee stampate di `Mappa 2.png`;
 - maschera completa di mare, laghi e spazi centrali esterni non transitabili;
 - corridoi dei ponti di nuvole della fascia equatoriale distinti dal mare aperto;
 - cuciture planetarie dei bordi alfabetici, con passaggio verso i due esagoni corrispondenti;

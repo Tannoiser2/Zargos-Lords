@@ -1,8 +1,10 @@
 extends Node3D
 
 const BOARD_SIZE := Vector2(16.0, 10.73828125)
-const HEX_RADIUS := 0.11616705
-const GRID_ORIGIN := Vector2(-7.9447363, -5.227517)
+## Calibrated directly against the white lattice printed on Mappa 2.png.
+## The board texture is mapped at exactly 256 pixels per world unit.
+const HEX_RADIUS := 0.1389238
+const GRID_ORIGIN := Vector2(-7.9039063, -5.422214)
 
 var state := ZargosGameState.new()
 var board_data := ZargosBoardData.new()
@@ -1169,9 +1171,9 @@ func _rebuild_unit_tray() -> void:
 		button.tooltip_text = "%s • Movimento %d • Combattimento %d%s" % [unit.unit_type, unit.movement, unit.combat, " • " + unit.ability if unit.ability else ""]
 		button.toggle_mode = true
 		button.button_pressed = unit == selected or unit in combat_group
-		var unavailable := state.phase == ZargosRules.Phase.ALLIANCES or _controller_for(unit.faction) != "human"
+		var unavailable := _controller_for(unit.faction) != "human"
 		if not deployment_mode:
-			unavailable = unavailable or unit.faction != state.active_faction()
+			unavailable = unavailable or state.phase == ZargosRules.Phase.ALLIANCES or unit.faction != state.active_faction()
 			if state.phase == ZargosRules.Phase.MOVEMENT:
 				unavailable = unavailable or unit.moved
 			elif state.phase == ZargosRules.Phase.COMBAT:
