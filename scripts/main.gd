@@ -14,6 +14,7 @@ var details_label: Label
 var score_label: Label
 var event_label: Label
 var grid_overlay: MeshInstance3D
+var movement_overlay: MeshInstance3D
 var rng := RandomNumberGenerator.new()
 var orbiting := false
 var panning := false
@@ -28,6 +29,7 @@ func _ready() -> void:
 	_build_environment()
 	_build_board()
 	_build_hex_overlay()
+	_build_movement_overlay()
 	_build_camera()
 	_build_lights()
 	_build_ui()
@@ -105,6 +107,36 @@ func _build_hex_overlay() -> void:
 	grid_overlay.mesh = mesh
 	grid_overlay.visible = false
 	add_child(grid_overlay)
+
+func _build_movement_overlay() -> void:
+	movement_overlay = MeshInstance3D.new()
+	movement_overlay.name = "MovementOverlay"
+	add_child(movement_overlay)
+
+func _show_reachable_hexes(unit: CardboardUnit) -> void:
+	movement_overlay.mesh = null
+	if state.phase != ZargosRules.Phase.MOVEMENT or unit.faction != state.active_faction() or unit.moved:
+		return
+	var flying := unit.ability == "Volo"
+	var reachable := board_data.reachable_hexes(unit.hex, unit.movement, flying, func(hex: Vector2i): return _unit_at(hex) != null and hex != unit.hex)
+	var mesh := ImmediateMesh.new()
+	var material := StandardMaterial3D.new()
+	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	material.albedo_color = Color(0.95, 0.68, 0.16, 0.30)
+	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mesh.surface_begin(Mesh.PRIMITIVE_TRIANGLES, material)
+	for hex: Vector2i in reachable:
+		if hex == unit.hex or _unit_at(hex):
+			continue
+		var center := hex_to_world(hex) + Vector3(0, 0.132, 0)
+		for side in range(6):
+			var a := deg_to_rad(60.0 * side + 30.0)
+			var b := deg_to_rad(60.0 * (side + 1) + 30.0)
+			mesh.surface_add_vertex(center)
+			mesh.surface_add_vertex(center + Vector3(cos(a) * HEX_RADIUS * 0.88, 0, sin(a) * HEX_RADIUS * 0.88))
+			mesh.surface_add_vertex(center + Vector3(cos(b) * HEX_RADIUS * 0.88, 0, sin(b) * HEX_RADIUS * 0.88))
+	mesh.surface_end()
+	movement_overlay.mesh = mesh
 
 func _build_camera() -> void:
 	camera_rig = Node3D.new()
@@ -302,9 +334,11 @@ func _select_unit(unit: CardboardUnit) -> void:
 		selected.set_selected(false)
 	selected = unit
 	if not selected:
+		movement_overlay.mesh = null
 		details_label.text = "Nessuna pedina selezionata."
 		return
 	selected.set_selected(true)
+	_show_reachable_hexes(selected)
 	details_label.text = "%s • %s • Movimento %d • Combattimento %d%s" % [selected.faction, selected.unit_type, selected.movement, selected.combat, " • " + selected.ability if selected.ability else ""]
 
 func _try_move_selected(destination: Vector2i) -> void:
@@ -328,6 +362,7 @@ func _try_move_selected(destination: Vector2i) -> void:
 	selected.hex = destination
 	selected.position = hex_to_world(destination) + Vector3(0, 0.18, 0)
 	selected.moved = true
+	movement_overlay.mesh = null
 	var terrain_name: String = String(ZargosRules.Terrain.keys()[board_data.terrain_at(destination)]).capitalize()
 	_show_event("%s spostato • costo %d/%d • terreno %s." % [selected.unit_type, movement_cost, selected.movement, terrain_name])
 
@@ -575,7 +610,7 @@ func _show_event(message: String) -> void:
 func _reset_camera() -> void:
 	camera_rig.position = Vector3.ZERO
 	orbit_yaw = 0.0
-	orbit_pitch = -0.82
+	orbit_pitch = -1.18
 	camera_distance = 15.2
 	_update_camera()
 
