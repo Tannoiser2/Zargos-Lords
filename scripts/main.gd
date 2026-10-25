@@ -118,7 +118,13 @@ func _show_reachable_hexes(unit: CardboardUnit) -> void:
 	if state.phase != ZargosRules.Phase.MOVEMENT or unit.faction != state.active_faction() or unit.moved:
 		return
 	var flying := unit.ability == "Volo"
-	var reachable := board_data.reachable_hexes(unit.hex, unit.movement, flying, func(hex: Vector2i): return _unit_at(hex) != null and hex != unit.hex)
+	var reachable := board_data.reachable_hexes(
+		unit.hex,
+		unit.movement,
+		flying,
+		func(hex: Vector2i): return _movement_blocked(hex, unit.faction, flying),
+		func(hex: Vector2i): return _in_enemy_zone_of_influence(hex, unit.faction) and not flying
+	)
 	var mesh := ImmediateMesh.new()
 	var material := StandardMaterial3D.new()
 	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
@@ -352,7 +358,14 @@ func _try_move_selected(destination: Vector2i) -> void:
 		_show_event("Questa pedina ha già mosso nel turno corrente.")
 		return
 	var flying := selected.ability == "Volo"
-	var movement_cost := board_data.find_movement_cost(selected.hex, destination, selected.movement, flying, func(hex: Vector2i): return _unit_at(hex) != null)
+	var movement_cost := board_data.find_movement_cost(
+		selected.hex,
+		destination,
+		selected.movement,
+		flying,
+		func(hex: Vector2i): return _movement_blocked(hex, selected.faction, flying),
+		func(hex: Vector2i): return _in_enemy_zone_of_influence(hex, selected.faction) and not flying
+	)
 	if movement_cost < 0:
 		_show_event("Destinazione non raggiungibile con il movimento e il terreno disponibili.")
 		return
@@ -371,6 +384,20 @@ func _unit_at(hex: Vector2i) -> CardboardUnit:
 		if child is CardboardUnit and child.visible and child.hex == hex:
 			return child
 	return null
+
+func _movement_blocked(hex: Vector2i, moving_faction: StringName, flying: bool) -> bool:
+	var unit := _unit_at(hex)
+	if not unit:
+		return false
+	# Amici e alleati possono essere attraversati; gli Alati sorvolano anche i nemici.
+	return unit.faction != moving_faction and not flying
+
+func _in_enemy_zone_of_influence(hex: Vector2i, moving_faction: StringName) -> bool:
+	for neighbor in _hex_neighbors(hex):
+		var unit := _unit_at(neighbor)
+		if unit and unit.faction != moving_faction:
+			return true
+	return false
 
 func _handle_city_click(city: CardboardCity) -> void:
 	if state.phase == ZargosRules.Phase.COMBAT and selected and city.faction != selected.faction:
@@ -685,7 +712,14 @@ func _best_ai_destination(unit: CardboardUnit) -> Vector2i:
 			var candidate := Vector2i(column, row)
 			if candidate != unit.hex and _unit_at(candidate):
 				continue
-			var cost := board_data.find_movement_cost(unit.hex, candidate, unit.movement, flying, func(hex: Vector2i): return _unit_at(hex) != null and hex != unit.hex)
+			var cost := board_data.find_movement_cost(
+				unit.hex,
+				candidate,
+				unit.movement,
+				flying,
+				func(hex: Vector2i): return _movement_blocked(hex, unit.faction, flying),
+				func(hex: Vector2i): return _in_enemy_zone_of_influence(hex, unit.faction) and not flying
+			)
 			if cost < 0:
 				continue
 			var nearest := 9999

@@ -17,10 +17,10 @@ func defense_bonus_at(hex: Vector2i) -> int:
 func set_terrain(hex: Vector2i, terrain_type: ZargosRules.Terrain) -> void:
 	terrain[hex] = terrain_type
 
-func find_movement_cost(start: Vector2i, goal: Vector2i, movement: int, flying: bool, occupied: Callable) -> int:
-	return reachable_hexes(start, movement, flying, occupied).get(goal, -1) as int
+func find_movement_cost(start: Vector2i, goal: Vector2i, movement: int, flying: bool, occupied: Callable, stops_movement: Callable = Callable()) -> int:
+	return reachable_hexes(start, movement, flying, occupied, stops_movement).get(goal, -1) as int
 
-func reachable_hexes(start: Vector2i, movement: int, flying: bool, occupied: Callable) -> Dictionary:
+func reachable_hexes(start: Vector2i, movement: int, flying: bool, occupied: Callable, stops_movement: Callable = Callable()) -> Dictionary:
 	var frontier: Array[Vector2i] = [start]
 	var costs := {start: 0}
 	while not frontier.is_empty():
@@ -41,8 +41,9 @@ func reachable_hexes(start: Vector2i, movement: int, flying: bool, occupied: Cal
 				continue
 			if not costs.has(neighbor) or new_cost < costs[neighbor]:
 				costs[neighbor] = new_cost
-				# Entrare in un gorgo conclude sempre il movimento.
-				if terrain_type != ZargosRules.Terrain.MAGIC_VORTEX:
+				# Gorghi e zone d'influenza nemiche concludono il movimento.
+				var must_stop: bool = stops_movement.is_valid() and bool(stops_movement.call(neighbor))
+				if terrain_type != ZargosRules.Terrain.MAGIC_VORTEX and not must_stop:
 					frontier.append(neighbor)
 	return costs
 
