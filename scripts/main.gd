@@ -252,6 +252,13 @@ func _build_ui() -> void:
 	reset_view.text = "Centra vista"
 	reset_view.pressed.connect(_reset_camera)
 	buttons.add_child(reset_view)
+	var grid_button := CheckButton.new()
+	grid_button.text = "Reticolo"
+	grid_button.toggled.connect(func(enabled: bool):
+		grid_overlay.visible = enabled
+		_show_event("Reticolo di calibrazione %s." % ("visibile" if enabled else "nascosto"))
+	)
+	buttons.add_child(grid_button)
 	ai_button = CheckButton.new()
 	ai_button.text = "IA avversari"
 	ai_button.toggled.connect(_on_ai_toggled)
@@ -465,10 +472,26 @@ func _pick_at(screen_position: Vector2) -> void:
 	elif collider is CardboardCity:
 		_handle_city_click(collider)
 	elif collider.has_meta("is_board"):
+		var clicked_hex := world_to_hex(hit.position)
 		if reappearing_unit:
-			_try_reappear(world_to_hex(hit.position))
+			_try_reappear(clicked_hex)
 		elif selected:
-			_try_move_selected(world_to_hex(hit.position))
+			_try_move_selected(clicked_hex)
+		else:
+			var terrain_name := _terrain_name(board_data.terrain_at(clicked_hex))
+			details_label.text = "Esagono %d,%d • %s" % [clicked_hex.x, clicked_hex.y, terrain_name]
+			_show_event("Coordinate mappa: %d,%d • Terreno: %s" % [clicked_hex.x, clicked_hex.y, terrain_name])
+
+func _terrain_name(terrain_type: ZargosRules.Terrain) -> String:
+	match terrain_type:
+		ZargosRules.Terrain.FOREST: return "Bosco"
+		ZargosRules.Terrain.MOUNTAIN: return "Montagna"
+		ZargosRules.Terrain.SEA: return "Mare"
+		ZargosRules.Terrain.CLOUD_BRIDGE: return "Ponte di nuvole"
+		ZargosRules.Terrain.MAGIC_VORTEX: return "Gorgo magico"
+		ZargosRules.Terrain.CITY: return "Città"
+		ZargosRules.Terrain.VOID: return "Fuori mappa"
+		_: return "Pianura"
 
 func _select_unit(unit: CardboardUnit) -> void:
 	_clear_combat_group()

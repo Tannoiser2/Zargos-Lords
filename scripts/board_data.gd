@@ -4,32 +4,36 @@ extends RefCounted
 var terrain: Dictionary = {}
 
 func _init() -> void:
-	# Prima passata verificata sulla scansione: acqua e spazi marroni esterni.
-	# Gli esagoni non ancora annotati restano pianura fino alla passata manuale.
+	# Maschera ricavata sui centri del reticolo stampato della scansione originale.
+	# Le coste vengono considerate terrestri quando il centro dell'esagono e' a
+	# terra; laghi, canali e mare aperto sono invece non transitabili.
 	var sea_hexes: Array[Vector2i] = [
-		Vector2i(1, 0), Vector2i(2, 0), Vector2i(13, 0), Vector2i(23, 0), Vector2i(28, 0), Vector2i(35, 0),
-		Vector2i(1, 1), Vector2i(14, 1), Vector2i(24, 1), Vector2i(14, 2), Vector2i(14, 4), Vector2i(16, 4),
-		Vector2i(20, 4), Vector2i(17, 5), Vector2i(19, 5), Vector2i(17, 6), Vector2i(35, 6), Vector2i(16, 8),
-		Vector2i(3, 9), Vector2i(27, 9), Vector2i(29, 9), Vector2i(0, 10), Vector2i(2, 10), Vector2i(3, 10),
-		Vector2i(13, 10), Vector2i(18, 10), Vector2i(20, 10), Vector2i(21, 10), Vector2i(24, 10), Vector2i(25, 10),
-		Vector2i(27, 10), Vector2i(30, 10), Vector2i(31, 10), Vector2i(33, 10), Vector2i(4, 11), Vector2i(8, 11),
-		Vector2i(12, 11), Vector2i(22, 11), Vector2i(25, 11), Vector2i(26, 11), Vector2i(30, 11), Vector2i(34, 11),
-		Vector2i(4, 12), Vector2i(5, 12), Vector2i(7, 12), Vector2i(12, 12), Vector2i(22, 12), Vector2i(6, 13),
-		Vector2i(10, 13), Vector2i(11, 13), Vector2i(20, 13), Vector2i(22, 13), Vector2i(19, 16), Vector2i(13, 18),
-		Vector2i(16, 18), Vector2i(16, 19), Vector2i(12, 20), Vector2i(35, 20), Vector2i(12, 21), Vector2i(0, 22),
-		Vector2i(1, 22), Vector2i(3, 22), Vector2i(13, 22), Vector2i(35, 22), Vector2i(1, 23), Vector2i(2, 23),
-		Vector2i(11, 23), Vector2i(13, 23), Vector2i(23, 23),
+		Vector2i(0, 1), Vector2i(0, 13), Vector2i(0, 21), Vector2i(0, 22), Vector2i(1, 0), Vector2i(1, 21), Vector2i(1, 22), Vector2i(1, 23),
+		Vector2i(2, 0), Vector2i(2, 13), Vector2i(2, 23), Vector2i(3, 0), Vector2i(3, 12), Vector2i(3, 13), Vector2i(3, 23), Vector2i(4, 11),
+		Vector2i(4, 12), Vector2i(4, 23), Vector2i(5, 10), Vector2i(6, 10), Vector2i(7, 10), Vector2i(8, 12), Vector2i(9, 0), Vector2i(9, 11),
+		Vector2i(10, 0), Vector2i(10, 10), Vector2i(11, 9), Vector2i(11, 10), Vector2i(12, 2), Vector2i(12, 3), Vector2i(12, 11), Vector2i(12, 12),
+		Vector2i(13, 0), Vector2i(13, 1), Vector2i(13, 3), Vector2i(13, 4), Vector2i(13, 12), Vector2i(13, 22), Vector2i(13, 23), Vector2i(14, 4),
+		Vector2i(14, 12), Vector2i(14, 19), Vector2i(14, 21), Vector2i(14, 22), Vector2i(15, 11), Vector2i(15, 14), Vector2i(15, 15), Vector2i(15, 19),
+		Vector2i(16, 4), Vector2i(16, 5), Vector2i(16, 13), Vector2i(16, 14), Vector2i(16, 15), Vector2i(16, 16), Vector2i(16, 19), Vector2i(17, 5),
+		Vector2i(17, 11), Vector2i(17, 15), Vector2i(17, 16), Vector2i(17, 17), Vector2i(18, 6), Vector2i(18, 13), Vector2i(18, 14), Vector2i(18, 17),
+		Vector2i(19, 5), Vector2i(19, 6), Vector2i(19, 7), Vector2i(19, 17), Vector2i(20, 6), Vector2i(20, 9), Vector2i(20, 10), Vector2i(20, 11),
+		Vector2i(20, 13), Vector2i(20, 19), Vector2i(21, 12), Vector2i(21, 21), Vector2i(22, 10), Vector2i(22, 11), Vector2i(22, 12), Vector2i(22, 23),
+		Vector2i(23, 10), Vector2i(23, 22), Vector2i(23, 23), Vector2i(24, 13), Vector2i(24, 22), Vector2i(24, 23), Vector2i(25, 11), Vector2i(25, 12),
+		Vector2i(25, 15), Vector2i(25, 22), Vector2i(26, 12), Vector2i(27, 12), Vector2i(27, 13), Vector2i(27, 21), Vector2i(27, 22), Vector2i(27, 23),
+		Vector2i(28, 13), Vector2i(28, 22), Vector2i(28, 23), Vector2i(29, 12), Vector2i(29, 13), Vector2i(29, 23), Vector2i(30, 12), Vector2i(30, 13),
+		Vector2i(31, 12), Vector2i(32, 12), Vector2i(33, 11), Vector2i(33, 12), Vector2i(34, 12), Vector2i(34, 16), Vector2i(34, 17), Vector2i(35, 0),
+		Vector2i(35, 2), Vector2i(35, 11), Vector2i(35, 12), Vector2i(35, 16), Vector2i(35, 17), Vector2i(35, 22),
 	]
 	for hex in sea_hexes:
 		terrain[hex] = ZargosRules.Terrain.SEA
 	var void_hexes: Array[Vector2i] = [
-		Vector2i(14, 0), Vector2i(15, 0), Vector2i(16, 0), Vector2i(17, 0), Vector2i(18, 0), Vector2i(19, 0), Vector2i(20, 0), Vector2i(21, 0),
-		Vector2i(16, 1), Vector2i(17, 1), Vector2i(18, 1), Vector2i(19, 1), Vector2i(20, 1),
-		Vector2i(16, 2), Vector2i(17, 2), Vector2i(18, 2), Vector2i(19, 2), Vector2i(20, 2),
-		Vector2i(18, 3), Vector2i(19, 3), Vector2i(18, 4),
-		Vector2i(15, 21), Vector2i(16, 21), Vector2i(17, 21), Vector2i(19, 21), Vector2i(20, 21),
-		Vector2i(15, 22), Vector2i(16, 22), Vector2i(17, 22), Vector2i(18, 22), Vector2i(19, 22), Vector2i(20, 22), Vector2i(21, 22),
-		Vector2i(14, 23), Vector2i(15, 23), Vector2i(16, 23), Vector2i(17, 23), Vector2i(18, 23), Vector2i(19, 23), Vector2i(20, 23), Vector2i(21, 23),
+		Vector2i(14, 0), Vector2i(14, 23), Vector2i(15, 0), Vector2i(15, 1), Vector2i(15, 21), Vector2i(15, 22), Vector2i(15, 23), Vector2i(16, 0),
+		Vector2i(16, 1), Vector2i(16, 2), Vector2i(16, 3), Vector2i(16, 20), Vector2i(16, 21), Vector2i(16, 22), Vector2i(16, 23), Vector2i(17, 0),
+		Vector2i(17, 1), Vector2i(17, 2), Vector2i(17, 3), Vector2i(17, 4), Vector2i(17, 18), Vector2i(17, 19), Vector2i(17, 20), Vector2i(17, 21),
+		Vector2i(17, 22), Vector2i(17, 23), Vector2i(18, 0), Vector2i(18, 1), Vector2i(18, 2), Vector2i(18, 3), Vector2i(18, 4), Vector2i(18, 5),
+		Vector2i(18, 18), Vector2i(18, 19), Vector2i(18, 20), Vector2i(18, 21), Vector2i(18, 22), Vector2i(18, 23), Vector2i(19, 0), Vector2i(19, 1),
+		Vector2i(19, 2), Vector2i(19, 3), Vector2i(19, 19), Vector2i(19, 20), Vector2i(19, 21), Vector2i(19, 22), Vector2i(19, 23), Vector2i(20, 0),
+		Vector2i(20, 1), Vector2i(20, 2), Vector2i(20, 21), Vector2i(20, 22), Vector2i(20, 23), Vector2i(21, 0), Vector2i(21, 22), Vector2i(21, 23),
 	]
 	for hex in void_hexes:
 		terrain[hex] = ZargosRules.Terrain.VOID
@@ -47,7 +51,7 @@ func _init() -> void:
 		Vector2i(25, 4), Vector2i(26, 4), Vector2i(27, 3), Vector2i(28, 3),
 	]
 	for hex in forest_hexes:
-		terrain[hex] = ZargosRules.Terrain.FOREST
+		terrain[_scan_coordinate(hex)] = ZargosRules.Terrain.FOREST
 	var mountain_hexes: Array[Vector2i] = [
 		# Catena nord-occidentale
 		Vector2i(10, 21), Vector2i(11, 21), Vector2i(8, 20), Vector2i(9, 20),
@@ -73,7 +77,7 @@ func _init() -> void:
 		Vector2i(30, 4), Vector2i(31, 4), Vector2i(33, 9), Vector2i(34, 9),
 	]
 	for hex in mountain_hexes:
-		terrain[hex] = ZargosRules.Terrain.MOUNTAIN
+		terrain[_scan_coordinate(hex)] = ZargosRules.Terrain.MOUNTAIN
 	var vortex_hexes: Array[Vector2i] = [
 		Vector2i(8, 18), Vector2i(7, 15), Vector2i(1, 14),
 		Vector2i(32, 23), Vector2i(31, 21), Vector2i(24, 16), Vector2i(20, 15), Vector2i(35, 17), Vector2i(33, 13),
@@ -81,7 +85,12 @@ func _init() -> void:
 		Vector2i(31, 9), Vector2i(19, 8), Vector2i(29, 1), Vector2i(32, 1),
 	]
 	for hex in vortex_hexes:
-		terrain[hex] = ZargosRules.Terrain.MAGIC_VORTEX
+		terrain[_scan_coordinate(hex)] = ZargosRules.Terrain.MAGIC_VORTEX
+
+func _scan_coordinate(old_hex: Vector2i) -> Vector2i:
+	# Le prime annotazioni erano state lette dal basso verso l'alto, mentre la
+	# texture e le coordinate di gioco partono dal bordo superiore della mappa.
+	return Vector2i(old_hex.x, ZargosRules.BOARD_ROWS - 1 - old_hex.y)
 
 func terrain_at(hex: Vector2i) -> ZargosRules.Terrain:
 	return terrain.get(hex, ZargosRules.Terrain.PLAIN) as ZargosRules.Terrain

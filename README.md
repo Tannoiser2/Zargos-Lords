@@ -37,14 +37,16 @@ Il repository contiene per ora il materiale di riferimento del gioco base:
 - guarnigioni nascoste fino a quattro unità e uscita dalla città;
 - assedio con più attaccanti, numero minimo richiesto, forza combinata della guarnigione e risultati speciali per le città;
 - percorso esagonale con costi di boschi, montagne, mari, ponti e gorghi;
-- prima maschera verificata degli esagoni marini e degli spazi esterni non transitabili;
-- annotazione manuale iniziale di boschi, montagne e gorghi magici sui quattro continenti;
+- reticolo 36 × 24 calibrato sui centri degli esagoni stampati della scansione originale;
+- maschera completa di mare, laghi e spazi centrali esterni non transitabili;
+- orientamento corretto delle annotazioni di boschi, montagne e gorghi magici sui quattro continenti;
+- reticolo di calibrazione attivabile e lettura di coordinate e terreno facendo clic sulla mappa;
 - bonus difensivi del terreno applicati al combattimento;
 - determinazione del vincitore in base alle città controllate al 25º mese;
 - modalità solitaria con popolo umano selezionabile e avversari controllati dall'IA;
 - test automatici delle regole e degli esempi del manuale.
 
-La classificazione definitiva dei terreni, lo schieramento libero completo e il multiplayer Firebase verranno aggiunti nelle fasi successive.
+La verifica manuale finale delle coste e dei ponti di nuvole, lo schieramento libero completo e il multiplayer Firebase verranno aggiunti nelle fasi successive.
 
 ## Avvio
 
@@ -60,6 +62,7 @@ https://tannoiser2.github.io/Zargos-Lords/
 - tasto centrale e trascinamento: sposta la visuale;
 - rotella: ingrandisce o allontana;
 - tasto sinistro: seleziona una pedina o una destinazione;
+- Reticolo: mostra o nasconde la griglia calibrata; facendo clic su un esagono libero vengono mostrate coordinate e terreno;
 - in combattimento, selezionare l'attaccante e poi una pedina nemica adiacente;
 - Esc: annulla la selezione.
 
