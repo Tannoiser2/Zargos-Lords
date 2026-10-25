@@ -26,11 +26,12 @@ Il repository contiene per ora il materiale di riferimento del gioco base:
 - calendario di 25 mesi;
 - tabelle originali complete per combattimento, frecce, fiamme e visioni;
 - risoluzione di eliminazioni e arretramenti, inclusa la fuga bloccata;
+- attacchi normali combinati con più pedine e ritirata dell'intero gruppo;
 - frecce, fiamme e visioni selezionando direttamente il bersaglio;
 - accumulo dei colpi a distanza sullo stesso bersaglio nel turno;
 - città tridimensionali, conquista e conteggio per fazione;
 - guarnigioni nascoste fino a quattro unità e uscita dalla città;
-- assedio con forza combinata della guarnigione e risultati speciali per le città;
+- assedio con più attaccanti, numero minimo richiesto, forza combinata della guarnigione e risultati speciali per le città;
 - percorso esagonale con costi di boschi, montagne, mari, ponti e gorghi;
 - bonus difensivi del terreno applicati al combattimento;
 - determinazione del vincitore in base alle città controllate al 25º mese;

@@ -9,6 +9,7 @@ var camera: Camera3D
 var camera_rig: Node3D
 var camera_pitch: Node3D
 var selected: CardboardUnit
+var combat_group: Array[CardboardUnit] = []
 var status_label: Label
 var details_label: Label
 var score_label: Label
@@ -423,8 +424,13 @@ func _pick_at(screen_position: Vector2) -> void:
 		return
 	var collider: Object = hit.collider
 	if collider is CardboardUnit:
-		if selected and collider != selected and state.phase == ZargosRules.Phase.COMBAT:
-			_resolve_attack(selected, collider)
+		if state.phase == ZargosRules.Phase.COMBAT and collider.faction == state.active_faction():
+			_toggle_combat_attacker(collider)
+		elif selected and collider != selected and state.phase == ZargosRules.Phase.COMBAT:
+			if combat_group.size() > 1:
+				_resolve_group_attack(collider)
+			else:
+				_resolve_attack(selected, collider)
 		else:
 			_select_unit(collider)
 	elif collider is CardboardCity:
@@ -433,6 +439,7 @@ func _pick_at(screen_position: Vector2) -> void:
 		_try_move_selected(world_to_hex(hit.position))
 
 func _select_unit(unit: CardboardUnit) -> void:
+	_clear_combat_group()
 	if selected:
 		selected.set_selected(false)
 	selected = unit
@@ -443,6 +450,32 @@ func _select_unit(unit: CardboardUnit) -> void:
 	selected.set_selected(true)
 	_show_reachable_hexes(selected)
 	details_label.text = "%s • %s • Movimento %d • Combattimento %d%s" % [selected.faction, selected.unit_type, selected.movement, selected.combat, " • " + selected.ability if selected.ability else ""]
+
+func _toggle_combat_attacker(unit: CardboardUnit) -> void:
+	if unit.acted:
+		_show_event("Questa pedina ha già combattuto nel turno corrente.")
+		return
+	if unit in combat_group:
+		combat_group.erase(unit)
+		unit.set_selected(false)
+	else:
+		combat_group.append(unit)
+		unit.set_selected(true)
+	selected = combat_group.back() if not combat_group.is_empty() else null
+	movement_overlay.mesh = null
+	details_label.text = "Attacco combinato: %d pedine • forza base %d • seleziona il difensore" % [combat_group.size(), _group_base_strength()]
+
+func _clear_combat_group() -> void:
+	for unit in combat_group:
+		if is_instance_valid(unit):
+			unit.set_selected(false)
+	combat_group.clear()
+
+func _group_base_strength() -> int:
+	var total := 0
+	for unit in combat_group:
+		total += _effective_combat(unit)
+	return total
 
 func _try_move_selected(destination: Vector2i) -> void:
 	if state.phase != ZargosRules.Phase.MOVEMENT:
@@ -498,7 +531,10 @@ func _in_enemy_zone_of_influence(hex: Vector2i, moving_faction: StringName) -> b
 
 func _handle_city_click(city: CardboardCity) -> void:
 	if state.phase == ZargosRules.Phase.COMBAT and selected and city.faction != selected.faction:
-		_resolve_siege(selected, city)
+		if combat_group.size() > 1:
+			_resolve_group_siege(city)
+		else:
+			_resolve_siege(selected, city)
 		return
 	if state.phase != ZargosRules.Phase.MOVEMENT:
 		_show_event("Le città si gestiscono durante Movimento o Combattimento.")
@@ -571,6 +607,9 @@ func _resolve_siege(attacker: CardboardUnit, city: CardboardCity) -> void:
 		state.capture_city(old_owner, attacker.faction)
 		_show_event("Città indifesa conquistata dai %s." % attacker.faction)
 		return
+	if city.garrison.size() > 1:
+		_show_event("Servono almeno %d assedianti per affrontare questa guarnigione." % city.garrison.size())
+		return
 	attacker.acted = true
 	var defense := city.garrison_strength()
 	var die := rng.randi_range(1, 6)
@@ -591,6 +630,49 @@ func _resolve_siege(attacker: CardboardUnit, city: CardboardCity) -> void:
 		_eliminate_unit(attacker)
 	elif code.begins_with("A"):
 		_retreat_unit(attacker, _city_threat_proxy(city), int(code.right(1)))
+
+func _resolve_group_siege(city: CardboardCity) -> void:
+	var attackers := combat_group.duplicate()
+	if attackers.size() < city.garrison.size():
+		_show_event("La guarnigione contiene %d pedine: occorrono almeno altrettanti assedianti." % city.garrison.size())
+		return
+	for attacker in attackers:
+		if attacker.acted or ZargosRules.hex_distance(attacker.hex, city.hex) != 1:
+			_show_event("Tutti gli assedianti devono essere disponibili e adiacenti alla città.")
+			return
+	if city.garrison.is_empty():
+		var old_owner := city.faction
+		city.change_owner(attackers[0].faction)
+		state.capture_city(old_owner, attackers[0].faction)
+		_clear_combat_group()
+		selected = null
+		_show_event("Città indifesa conquistata dai %s." % attackers[0].faction)
+		return
+	var attack_strength := _group_base_strength()
+	var defense := city.garrison_strength()
+	var die := rng.randi_range(1, 6)
+	var result := ZargosRules.resolve_combat(attack_strength, defense, die)
+	for attacker in attackers:
+		attacker.acted = true
+	var code: String = result.result
+	if code in ["D1", "D3"]:
+		code = "A1"
+	_show_event("Assedio combinato (%d) • dado %d • %d contro %d: %s" % [attackers.size(), die, attack_strength, defense, code])
+	_clear_combat_group()
+	selected = null
+	if code in ["D5", "DE"]:
+		for defeated in city.clear_garrison():
+			_eliminate_unit(defeated)
+		var old_owner := city.faction
+		city.change_owner(attackers[0].faction)
+		state.capture_city(old_owner, attackers[0].faction)
+		_show_event(event_label.text + " • città conquistata")
+	elif code == "AE" or code == "IMPOSSIBILE":
+		for attacker in attackers:
+			_eliminate_unit(attacker)
+	else:
+		for attacker in attackers:
+			_retreat_unit(attacker, _city_threat_proxy(city), int(code.right(1)))
 
 func _city_threat_proxy(city: CardboardCity) -> CardboardUnit:
 	# Unità temporanea non inserita nell'albero: serve solo come origine geometrica della fuga.
@@ -648,6 +730,41 @@ func _resolve_attack(attacker: CardboardUnit, defender: CardboardUnit) -> void:
 			var retreating := defender if result.retreat > 0 else attacker
 			var threat := attacker if result.retreat > 0 else defender
 			_retreat_unit(retreating, threat, absi(result.retreat))
+
+func _resolve_group_attack(defender: CardboardUnit) -> void:
+	if defender.faction == state.active_faction():
+		_show_event("Il bersaglio deve appartenere a un popolo nemico.")
+		return
+	if combat_group.is_empty():
+		return
+	for attacker in combat_group:
+		if not is_instance_valid(attacker) or attacker.acted or ZargosRules.hex_distance(attacker.hex, defender.hex) != 1:
+			_show_event("Tutti gli attaccanti devono essere disponibili e adiacenti allo stesso difensore.")
+			return
+	var attackers := combat_group.duplicate()
+	var attack_strength := _group_base_strength()
+	var defense_strength := _effective_combat(defender) + board_data.defense_bonus_at(defender.hex)
+	var die := rng.randi_range(1, 6)
+	var result := ZargosRules.resolve_combat(attack_strength, defense_strength, die)
+	for attacker in attackers:
+		attacker.acted = true
+	_show_event("Attacco combinato (%d pedine) • dado %d • %d contro %d: %s [%s]" % [attackers.size(), die, attack_strength, defense_strength, result.text, result.result])
+	_clear_combat_group()
+	selected = null
+	match result.result:
+		"DE": _eliminate_unit(defender)
+		"AE":
+			for attacker in attackers:
+				_eliminate_unit(attacker)
+		"IMPOSSIBILE":
+			for attacker in attackers:
+				attacker.acted = false
+		_:
+			if result.retreat > 0:
+				_retreat_unit(defender, attackers[0], absi(result.retreat))
+			else:
+				for attacker in attackers:
+					_retreat_unit(attacker, defender, absi(result.retreat))
 
 func _resolve_ranged_attack(attacker: CardboardUnit, defender: CardboardUnit, distance: int) -> void:
 	var die := rng.randi_range(1, 6)
