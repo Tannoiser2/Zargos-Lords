@@ -11,6 +11,8 @@ zargos2-2.jpg
 .godot/
 export.cfg
 export_presets.cfg
+/*.jpg.import
+/*.png.import
 
 # Credenziali e configurazioni locali
 .env
