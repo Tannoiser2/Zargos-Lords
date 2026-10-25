@@ -20,6 +20,8 @@ var panning := false
 var orbit_yaw := 0.0
 var orbit_pitch := -0.82
 var camera_distance := 12.8
+var ai_enabled := false
+var ai_running := false
 
 func _ready() -> void:
 	rng.randomize()
@@ -184,6 +186,10 @@ func _build_ui() -> void:
 	grid_button.button_pressed = true
 	grid_button.toggled.connect(func(value: bool): grid_overlay.visible = value)
 	buttons.add_child(grid_button)
+	var ai_button := CheckButton.new()
+	ai_button.text = "IA avversari"
+	ai_button.toggled.connect(_on_ai_toggled)
+	buttons.add_child(ai_button)
 
 	event_label = Label.new()
 	event_label.position = Vector2(20, 194)
@@ -563,6 +569,8 @@ func _refresh_ui() -> void:
 	score_label.text = "Città: " + state.city_score()
 	if state.game_over:
 		_show_event("Fine della partita • Vincitori: %s" % ", ".join(state.winners()))
+	elif ai_enabled and state.active_faction() != &"Cavalieri" and not ai_running:
+		call_deferred("_run_ai_turn")
 
 func _show_event(message: String) -> void:
 	event_label.text = message
@@ -578,4 +586,94 @@ func _update_camera() -> void:
 	camera_rig.rotation.y = orbit_yaw
 	camera_pitch.rotation.x = orbit_pitch
 	camera.position = Vector3(0, 0, camera_distance)
+
+func _on_ai_toggled(enabled: bool) -> void:
+	ai_enabled = enabled
+	_show_event("Avversari IA %s." % ("attivati" if enabled else "disattivati"))
+	_refresh_ui()
+
+func _run_ai_turn() -> void:
+	if ai_running or not ai_enabled or state.game_over or state.active_faction() == &"Cavalieri":
+		return
+	ai_running = true
+	var faction := state.active_faction()
+	_show_event("I %s stanno pianificando la mossa…" % faction)
+	await get_tree().create_timer(0.35).timeout
+	if state.phase == ZargosRules.Phase.ALLIANCES:
+		state.advance_phase()
+	for unit in _units_for_faction(faction):
+		var destination := _best_ai_destination(unit)
+		if destination != unit.hex:
+			unit.hex = destination
+			var tween := create_tween()
+			tween.tween_property(unit, "position", hex_to_world(destination) + Vector3(0, 0.18, 0), 0.18)
+			unit.moved = true
+			await tween.finished
+	state.advance_phase()
+	for unit in _units_for_faction(faction):
+		if not is_instance_valid(unit) or unit.acted:
+			continue
+		var target := _best_ai_target(unit)
+		if target:
+			_resolve_attack(unit, target)
+			await get_tree().create_timer(0.18).timeout
+	state.advance_phase()
+	ai_running = false
+	_show_event("Turno dei %s completato." % faction)
+	_refresh_ui()
+
+func _units_for_faction(faction: StringName) -> Array[CardboardUnit]:
+	var result: Array[CardboardUnit] = []
+	for child in get_children():
+		if child is CardboardUnit and child.visible and child.faction == faction:
+			result.append(child)
+	return result
+
+func _enemy_units(faction: StringName) -> Array[CardboardUnit]:
+	var result: Array[CardboardUnit] = []
+	for child in get_children():
+		if child is CardboardUnit and child.visible and child.faction != faction:
+			result.append(child)
+	return result
+
+func _best_ai_destination(unit: CardboardUnit) -> Vector2i:
+	var targets: Array[Vector2i] = []
+	for enemy in _enemy_units(unit.faction):
+		targets.append(enemy.hex)
+	for child in get_children():
+		if child is CardboardCity and child.faction != unit.faction:
+			targets.append(child.hex)
+	if targets.is_empty():
+		return unit.hex
+	var best_hex := unit.hex
+	var best_distance := 9999
+	var flying := unit.ability == "Volo"
+	for column in range(ZargosRules.BOARD_COLUMNS):
+		for row in range(ZargosRules.BOARD_ROWS):
+			var candidate := Vector2i(column, row)
+			if candidate != unit.hex and _unit_at(candidate):
+				continue
+			var cost := board_data.find_movement_cost(unit.hex, candidate, unit.movement, flying, func(hex: Vector2i): return _unit_at(hex) != null and hex != unit.hex)
+			if cost < 0:
+				continue
+			var nearest := 9999
+			for target_hex in targets:
+				nearest = mini(nearest, ZargosRules.hex_distance(candidate, target_hex))
+			if nearest < best_distance:
+				best_distance = nearest
+				best_hex = candidate
+	return best_hex
+
+func _best_ai_target(unit: CardboardUnit) -> CardboardUnit:
+	var max_range := 1
+	if unit.ability == "Tiro": max_range = 8
+	elif unit.ability in ["Fiamme", "Visione"]: max_range = 5
+	var best: CardboardUnit = null
+	var best_distance := 9999
+	for enemy in _enemy_units(unit.faction):
+		var distance := ZargosRules.hex_distance(unit.hex, enemy.hex)
+		if distance <= max_range and distance < best_distance:
+			best = enemy
+			best_distance = distance
+	return best
 

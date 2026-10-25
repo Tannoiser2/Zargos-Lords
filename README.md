@@ -32,6 +32,7 @@ Il repository contiene per ora il materiale di riferimento del gioco base:
 - percorso esagonale con costi di boschi, montagne, mari, ponti e gorghi;
 - bonus difensivi del terreno applicati al combattimento;
 - determinazione del vincitore in base alle città controllate al 25º mese;
+- modalità solitaria iniziale con Cavalieri umani e tre popoli controllati dall'IA;
 - test automatici delle regole e degli esempi del manuale.
 
 I terreni definitivi, gli schieramenti, gli avversari IA e il multiplayer Firebase verranno aggiunti nelle fasi successive.
