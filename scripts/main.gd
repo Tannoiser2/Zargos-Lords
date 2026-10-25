@@ -135,7 +135,7 @@ func _show_reachable_hexes(unit: CardboardUnit) -> void:
 	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	mesh.surface_begin(Mesh.PRIMITIVE_TRIANGLES, material)
 	for hex: Vector2i in reachable:
-		if hex == unit.hex or _unit_at(hex):
+		if hex == unit.hex or (_unit_at(hex) and not _can_form_escort(unit, hex)):
 			continue
 		var center := hex_to_world(hex) + Vector3(0, 0.132, 0)
 		for side in range(6):
@@ -499,21 +499,64 @@ func _try_move_selected(destination: Vector2i) -> void:
 	if movement_cost < 0:
 		_show_event("Destinazione non raggiungibile con il movimento e il terreno disponibili.")
 		return
-	if _unit_at(destination):
+	var occupant := _unit_at(destination)
+	if occupant and not _can_form_escort(selected, destination):
 		_show_event("L'esagono è già occupato.")
 		return
+	_detach_escort(selected)
 	selected.hex = destination
 	selected.position = hex_to_world(destination) + Vector3(0, 0.18, 0)
 	selected.moved = true
+	if occupant:
+		_form_escort(selected, occupant)
 	movement_overlay.mesh = null
 	var terrain_name: String = String(ZargosRules.Terrain.keys()[board_data.terrain_at(destination)]).capitalize()
-	_show_event("%s spostato • costo %d/%d • terreno %s." % [selected.unit_type, movement_cost, selected.movement, terrain_name])
+	_show_event("%s spostato • costo %d/%d • terreno %s%s." % [selected.unit_type, movement_cost, selected.movement, terrain_name, " • scorta formata" if occupant else ""])
 
 func _unit_at(hex: Vector2i) -> CardboardUnit:
+	var units := _units_at(hex)
+	if units.is_empty():
+		return null
+	# La fanteria di scorta è impilata sopra e subisce per prima ogni attacco.
+	for unit in units:
+		if unit.guard_target:
+			return unit
+	return units[0]
+
+func _units_at(hex: Vector2i) -> Array[CardboardUnit]:
+	var result: Array[CardboardUnit] = []
 	for child in get_children():
 		if child is CardboardUnit and child.visible and child.hex == hex:
-			return child
-	return null
+			result.append(child)
+	return result
+
+func _can_form_escort(unit: CardboardUnit, destination: Vector2i) -> bool:
+	var units := _units_at(destination)
+	if units.size() != 1:
+		return false
+	var other := units[0]
+	if other.faction != unit.faction or other.guard_unit or other.guard_target:
+		return false
+	return (unit.unit_type == &"Fante") != (other.unit_type == &"Fante")
+
+func _form_escort(a: CardboardUnit, b: CardboardUnit) -> void:
+	var guard := a if a.unit_type == &"Fante" else b
+	var protected := b if guard == a else a
+	guard.guard_target = protected
+	protected.guard_unit = guard
+	guard.position = hex_to_world(guard.hex) + Vector3(0, 0.24, 0)
+	protected.position = hex_to_world(protected.hex) + Vector3(0, 0.17, 0)
+	_show_event("%s forma una scorta per %s." % [guard.unit_type, protected.unit_type])
+
+func _detach_escort(unit: CardboardUnit) -> void:
+	if unit.guard_target:
+		unit.guard_target.guard_unit = null
+		unit.guard_target.position = hex_to_world(unit.guard_target.hex) + Vector3(0, 0.18, 0)
+		unit.guard_target = null
+	if unit.guard_unit:
+		unit.guard_unit.guard_target = null
+		unit.guard_unit.position = hex_to_world(unit.guard_unit.hex) + Vector3(0, 0.18, 0)
+		unit.guard_unit = null
 
 func _movement_blocked(hex: Vector2i, moving_faction: StringName, flying: bool) -> bool:
 	var unit := _unit_at(hex)
@@ -825,10 +868,15 @@ func _retreat_unit(unit: CardboardUnit, threat: CardboardUnit, distance: int) ->
 	unit.hex = current
 	var tween := create_tween()
 	tween.tween_property(unit, "position", hex_to_world(current) + Vector3(0, 0.18, 0), 0.28).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	if unit.guard_target:
+		unit.guard_target.hex = current
+		tween.parallel().tween_property(unit.guard_target, "position", hex_to_world(current) + Vector3(0, 0.17, 0), 0.28)
+		tween.parallel().tween_property(unit, "position", hex_to_world(current) + Vector3(0, 0.24, 0), 0.28)
 
 func _eliminate_unit(unit: CardboardUnit) -> void:
 	if selected == unit:
 		selected = null
+	_detach_escort(unit)
 	var tween := create_tween()
 	tween.tween_property(unit, "scale", Vector3.ZERO, 0.22).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_IN)
 	tween.tween_callback(unit.queue_free)
@@ -911,14 +959,14 @@ func _run_ai_turn() -> void:
 func _units_for_faction(faction: StringName) -> Array[CardboardUnit]:
 	var result: Array[CardboardUnit] = []
 	for child in get_children():
-		if child is CardboardUnit and child.visible and child.faction == faction:
+		if child is CardboardUnit and child.visible and child.faction == faction and not child.guard_unit:
 			result.append(child)
 	return result
 
 func _enemy_units(faction: StringName) -> Array[CardboardUnit]:
 	var result: Array[CardboardUnit] = []
 	for child in get_children():
-		if child is CardboardUnit and child.visible and child.faction != faction:
+		if child is CardboardUnit and child.visible and child.faction != faction and not child.guard_unit:
 			result.append(child)
 	return result
 

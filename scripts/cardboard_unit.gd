@@ -10,6 +10,8 @@ var hex := Vector2i.ZERO
 var moved := false
 var acted := false
 var ranged_hits := 0
+var guard_target: CardboardUnit
+var guard_unit: CardboardUnit
 
 const COUNTER_TEXTURES := {
 	&"Cavalieri": {

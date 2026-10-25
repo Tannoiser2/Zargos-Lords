@@ -27,6 +27,7 @@ Il repository contiene per ora il materiale di riferimento del gioco base:
 - tabelle originali complete per combattimento, frecce, fiamme e visioni;
 - risoluzione di eliminazioni e arretramenti, inclusa la fuga bloccata;
 - attacchi normali combinati con più pedine e ritirata dell'intero gruppo;
+- formazione delle scorte sovrapponendo un fante a una pedina amica non-fante;
 - frecce, fiamme e visioni selezionando direttamente il bersaglio;
 - accumulo dei colpi a distanza sullo stesso bersaglio nel turno;
 - città tridimensionali, conquista e conteggio per fazione;
