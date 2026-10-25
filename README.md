@@ -21,6 +21,7 @@ Il repository contiene per ora il materiale di riferimento del gioco base:
 - evidenziazione delle destinazioni raggiungibili e zone d'influenza nemiche;
 - preparazione della partita con scelta di 2, 3 o 4 popoli e del popolo umano;
 - assegnazione di due continenti per popolo nelle partite a due;
+- schieramento iniziale interattivo di pedine e città sui continenti assegnati;
 - sequenza Alleanze, Movimento e Combattimento;
 - ordine di turno Cavalieri, Draghi, Alati e Monaci;
 - calendario di 25 mesi;
@@ -49,7 +50,7 @@ Il repository contiene per ora il materiale di riferimento del gioco base:
 - modalità solitaria con popolo umano selezionabile e avversari controllati dall'IA;
 - test automatici delle regole e degli esempi del manuale.
 
-La verifica manuale finale delle coste, lo schieramento libero completo e il multiplayer Firebase verranno aggiunti nelle fasi successive.
+La verifica manuale finale delle coste e il multiplayer Firebase verranno aggiunti nelle fasi successive.
 
 ## Avvio
 
@@ -65,6 +66,7 @@ https://tannoiser2.github.io/Zargos-Lords/
 - tasto centrale e trascinamento: sposta la visuale;
 - rotella: ingrandisce o allontana;
 - tasto sinistro: seleziona una pedina o una destinazione;
+- prima del mese 1, selezionare pedine o città e collocarle sui propri continenti, quindi premere Termina schieramento;
 - Reticolo: mostra o nasconde la griglia calibrata; facendo clic su un esagono libero vengono mostrate coordinate e terreno;
 - in combattimento, selezionare l'attaccante e poi una pedina nemica adiacente;
 - Esc: annulla la selezione.

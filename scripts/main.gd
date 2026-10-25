@@ -17,6 +17,7 @@ var event_label: Label
 var ai_button: CheckButton
 var escort_button: Button
 var special_button: Button
+var deployment_button: Button
 var grid_overlay: MeshInstance3D
 var movement_overlay: MeshInstance3D
 var rng := RandomNumberGenerator.new()
@@ -30,6 +31,9 @@ var ai_running := false
 var human_faction: StringName = &"Cavalieri"
 var setup_layer: CanvasLayer
 var reappearing_unit: CardboardUnit
+var deployment_mode := false
+var deployment_city: CardboardCity
+var territory_owners: Dictionary = {}
 
 func _ready() -> void:
 	rng.randomize()
@@ -263,6 +267,11 @@ func _build_ui() -> void:
 	ai_button.text = "IA avversari"
 	ai_button.toggled.connect(_on_ai_toggled)
 	buttons.add_child(ai_button)
+	deployment_button = Button.new()
+	deployment_button.text = "Termina schieramento"
+	deployment_button.visible = false
+	deployment_button.pressed.connect(_finish_deployment)
+	buttons.add_child(deployment_button)
 
 	event_label = Label.new()
 	event_label.position = Vector2(20, 194)
@@ -331,7 +340,7 @@ func _build_setup_screen() -> void:
 		faction_choice.add_item(String(faction))
 	stack.add_child(faction_choice)
 	var note := Label.new()
-	note.text = "Gli altri popoli saranno controllati dall'IA.\nLo schieramento libero completo verrà aggiunto nel prossimo passaggio."
+	note.text = "Gli altri popoli saranno controllati dall'IA.\nDopo l'avvio potrai disporre liberamente pedine e città sui tuoi continenti."
 	note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	note.add_theme_color_override("font_color", Color("bfae91"))
 	stack.add_child(note)
@@ -352,12 +361,17 @@ func _start_new_game(player_count: int, human_index: int) -> void:
 			active.append(candidate)
 		cursor = (cursor + 1) % ZargosRules.FACTIONS.size()
 	state.configure(active)
-	var owners := _territory_owners(active)
-	_spawn_armies(owners)
-	_spawn_cities(owners)
-	ai_button.button_pressed = true
+	territory_owners = _territory_owners(active)
+	_spawn_armies(territory_owners)
+	_spawn_cities(territory_owners)
+	deployment_mode = true
+	ai_enabled = false
+	ai_button.button_pressed = false
+	ai_button.disabled = true
+	deployment_button.visible = true
 	setup_layer.queue_free()
-	_show_event("La Guerra dei Signori ha inizio. Tu controlli i %s." % human_faction)
+	_show_event("Schieramento dei %s: seleziona una pedina o città, poi un esagono libero del tuo continente." % human_faction)
+	details_label.text = "SCHIERAMENTO • Disponi le tue forze, poi premi Termina schieramento."
 	_refresh_ui()
 
 func _territory_owners(active: Array[StringName]) -> Dictionary:
@@ -460,6 +474,9 @@ func _pick_at(screen_position: Vector2) -> void:
 		return
 	var collider: Object = hit.collider
 	if collider is CardboardUnit:
+		if deployment_mode:
+			_select_deployment_unit(collider)
+			return
 		if state.phase == ZargosRules.Phase.COMBAT and collider.faction == state.active_faction():
 			_toggle_combat_attacker(collider)
 		elif selected and collider != selected and state.phase == ZargosRules.Phase.COMBAT:
@@ -470,10 +487,15 @@ func _pick_at(screen_position: Vector2) -> void:
 		else:
 			_select_unit(collider)
 	elif collider is CardboardCity:
+		if deployment_mode:
+			_select_deployment_city(collider)
+			return
 		_handle_city_click(collider)
 	elif collider.has_meta("is_board"):
 		var clicked_hex := world_to_hex(hit.position)
-		if reappearing_unit:
+		if deployment_mode:
+			_try_deployment_move(clicked_hex)
+		elif reappearing_unit:
 			_try_reappear(clicked_hex)
 		elif selected:
 			_try_move_selected(clicked_hex)
@@ -509,6 +531,74 @@ func _select_unit(unit: CardboardUnit) -> void:
 	_update_special_button()
 	_show_reachable_hexes(selected)
 	details_label.text = "%s • %s • Movimento %d • Combattimento %d%s" % [selected.faction, selected.unit_type, selected.movement, selected.combat, " • " + selected.ability if selected.ability else ""]
+
+func _select_deployment_unit(unit: CardboardUnit) -> void:
+	if unit.faction != human_faction:
+		_show_event("Durante lo schieramento puoi disporre soltanto le pedine dei %s." % human_faction)
+		return
+	_clear_deployment_selection()
+	selected = unit
+	selected.set_selected(true)
+	details_label.text = "SCHIERAMENTO • %s • %s • scegli un esagono libero sui tuoi continenti" % [unit.faction, unit.unit_type]
+
+func _select_deployment_city(city: CardboardCity) -> void:
+	if city.faction != human_faction:
+		_show_event("Durante lo schieramento puoi disporre soltanto le città dei %s." % human_faction)
+		return
+	_clear_deployment_selection()
+	deployment_city = city
+	city.set_selected(true)
+	details_label.text = "SCHIERAMENTO • Città dei %s • scegli un esagono libero sui tuoi continenti" % city.faction
+
+func _clear_deployment_selection() -> void:
+	if selected:
+		selected.set_selected(false)
+	selected = null
+	if deployment_city:
+		deployment_city.set_selected(false)
+	deployment_city = null
+	movement_overlay.mesh = null
+
+func _try_deployment_move(destination: Vector2i) -> void:
+	if not selected and not deployment_city:
+		var continent := board_data.continent_at(destination)
+		_show_event("Esagono %d,%d • continente %s • %s" % [destination.x, destination.y, continent, _terrain_name(board_data.terrain_at(destination))])
+		return
+	if not board_data.is_deployment_hex(destination):
+		_show_event("Questo esagono non è disponibile per lo schieramento.")
+		return
+	var continent := board_data.continent_at(destination)
+	if territory_owners.get(continent, &"") != human_faction:
+		_show_event("L'esagono appartiene al continente dei %s." % territory_owners.get(continent, continent))
+		return
+	var occupying_unit := _unit_at(destination)
+	var occupying_city := _city_at(destination)
+	if selected:
+		if (occupying_unit and occupying_unit != selected) or occupying_city:
+			_show_event("L'esagono è già occupato.")
+			return
+		selected.hex = destination
+		selected.position = hex_to_world(destination) + Vector3(0, 0.18, 0)
+		_show_event("%s schierato sul continente %s, esagono %d,%d." % [selected.unit_type, continent, destination.x, destination.y])
+	else:
+		if occupying_unit or (occupying_city and occupying_city != deployment_city):
+			_show_event("L'esagono è già occupato.")
+			return
+		deployment_city.hex = destination
+		deployment_city.position = hex_to_world(destination) + Vector3(0, 0.19, 0)
+		_show_event("Città schierata sul continente %s, esagono %d,%d." % [continent, destination.x, destination.y])
+
+func _finish_deployment() -> void:
+	if not deployment_mode:
+		return
+	_clear_deployment_selection()
+	deployment_mode = false
+	deployment_button.visible = false
+	ai_button.disabled = false
+	ai_button.button_pressed = true
+	_show_event("Schieramento completato. La Guerra dei Signori ha inizio: tu controlli i %s." % human_faction)
+	details_label.text = "Seleziona una pedina attiva, poi un esagono di destinazione."
+	_refresh_ui()
 
 func _toggle_combat_attacker(unit: CardboardUnit) -> void:
 	if unit.acted:
@@ -962,6 +1052,9 @@ func _city_threat_proxy(city: CardboardCity) -> CardboardUnit:
 	return proxy
 
 func _on_next_phase() -> void:
+	if deployment_mode:
+		_show_event("Termina prima lo schieramento iniziale.")
+		return
 	var old_faction := state.active_faction()
 	state.advance_phase()
 	if state.phase == ZargosRules.Phase.ALLIANCES or state.active_faction() != old_faction:
@@ -972,6 +1065,9 @@ func _on_next_phase() -> void:
 	_select_unit(null)
 
 func _on_resolve_battle() -> void:
+	if deployment_mode:
+		_show_event("Il combattimento inizia dopo lo schieramento.")
+		return
 	if state.phase != ZargosRules.Phase.COMBAT or not selected:
 		_show_event("Seleziona un attaccante durante la fase Combattimento.")
 		return
@@ -1201,7 +1297,7 @@ func _refresh_ui() -> void:
 	score_label.text = "Città: " + state.city_score()
 	if state.game_over:
 		_show_event("Fine della partita • Vincitori: %s" % ", ".join(state.winners()))
-	elif ai_enabled and state.active_faction() != human_faction and not ai_running:
+	elif not deployment_mode and ai_enabled and state.active_faction() != human_faction and not ai_running:
 		call_deferred("_run_ai_turn")
 	_update_special_button()
 
@@ -1221,12 +1317,15 @@ func _update_camera() -> void:
 	camera.position = Vector3(0, 0, camera_distance)
 
 func _on_ai_toggled(enabled: bool) -> void:
+	if deployment_mode:
+		ai_enabled = false
+		return
 	ai_enabled = enabled
 	_show_event("Avversari IA %s." % ("attivati" if enabled else "disattivati"))
 	_refresh_ui()
 
 func _run_ai_turn() -> void:
-	if ai_running or not ai_enabled or state.game_over or state.active_faction() == human_faction:
+	if deployment_mode or ai_running or not ai_enabled or state.game_over or state.active_faction() == human_faction:
 		return
 	ai_running = true
 	var faction := state.active_faction()

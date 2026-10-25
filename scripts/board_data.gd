@@ -111,6 +111,20 @@ func _scan_coordinate(old_hex: Vector2i) -> Vector2i:
 func terrain_at(hex: Vector2i) -> ZargosRules.Terrain:
 	return terrain.get(hex, ZargosRules.Terrain.PLAIN) as ZargosRules.Terrain
 
+static func continent_at(hex: Vector2i) -> StringName:
+	if not is_on_board(hex):
+		return &""
+	if hex.y < ZargosRules.BOARD_ROWS / 2:
+		return &"Cavalieri" if hex.x < ZargosRules.BOARD_COLUMNS / 2 else &"Draghi"
+	return &"Alati" if hex.x < ZargosRules.BOARD_COLUMNS / 2 else &"Monaci"
+
+func is_deployment_hex(hex: Vector2i) -> bool:
+	return is_on_board(hex) and terrain_at(hex) not in [
+		ZargosRules.Terrain.SEA,
+		ZargosRules.Terrain.CLOUD_BRIDGE,
+		ZargosRules.Terrain.VOID,
+	]
+
 func defense_bonus_at(hex: Vector2i) -> int:
 	return ZargosRules.defense_bonus(terrain_at(hex))
 

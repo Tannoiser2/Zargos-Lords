@@ -64,6 +64,9 @@ func change_owner(new_faction: StringName) -> void:
 	material.albedo_color = ZargosRules.FACTION_COLORS[faction].darkened(0.18)
 	face_material.albedo_texture = CITY_TEXTURES[faction]
 
+func set_selected(value: bool) -> void:
+	scale = Vector3.ONE * (1.16 if value else 1.0)
+
 func can_garrison() -> bool:
 	return garrison.size() < 4
 
