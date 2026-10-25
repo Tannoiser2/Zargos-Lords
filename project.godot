@@ -1,0 +1,23 @@
+; Zargo's Lords - Godot 4 project
+config_version=5
+
+[application]
+config/name="Zargo's Lords"
+run/main_scene="res://scenes/main.tscn"
+
+[display]
+window/size/viewport_width=1440
+window/size/viewport_height=900
+window/size/window_width_override=1280
+window/size/window_height_override=800
+window/stretch/mode="canvas_items"
+
+[rendering]
+renderer/rendering_method="gl_compatibility"
+renderer/rendering_method.mobile="gl_compatibility"
+textures/default_filters/use_nearest_mipmap_filter=false
+
+[input]
+confirm_action={"deadzone": 0.5, "events": [Object(InputEventKey,"physical_keycode":4194309)]}
+cancel_action={"deadzone": 0.5, "events": [Object(InputEventKey,"physical_keycode":4194305)]}
+

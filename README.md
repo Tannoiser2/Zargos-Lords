@@ -11,7 +11,31 @@ Il repository contiene per ora il materiale di riferimento del gioco base:
 - fogli delle pedine dei quattro popoli originali;
 - tabelle, copertine e illustrazioni di riferimento.
 
-Il progetto Godot, le regole digitalizzate, gli avversari IA e il multiplayer online verranno aggiunti nelle fasi successive.
+È disponibile un primo prototipo Godot 4.7 con:
+
+- tabellone tridimensionale con spessore e texture della mappa;
+- camera orbitale con rotazione, ingrandimento e spostamento;
+- pedine esagonali tridimensionali di tipo cartoncino;
+- quattro popoli con valori base di movimento e combattimento;
+- selezione e movimento su una griglia esagonale logica;
+- sequenza Alleanze, Movimento e Combattimento;
+- ordine di turno Cavalieri, Draghi, Alati e Monaci;
+- calendario di 25 mesi;
+- primo risolutore di combattimento e test automatici delle regole.
+
+La trascrizione completa delle tabelle rotanti, i terreni definitivi, gli schieramenti, gli avversari IA e il multiplayer Firebase verranno aggiunti nelle fasi successive.
+
+## Avvio
+
+Aprire `project.godot` con Godot 4.7 e avviare la scena principale.
+
+## Controlli
+
+- tasto destro e trascinamento: ruota il tabellone;
+- tasto centrale e trascinamento: sposta la visuale;
+- rotella: ingrandisce o allontana;
+- tasto sinistro: seleziona una pedina o una destinazione;
+- Esc: annulla la selezione.
 
 ## Edizione di riferimento
 
