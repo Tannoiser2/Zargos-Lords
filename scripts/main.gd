@@ -10,6 +10,7 @@ var camera_pitch: Node3D
 var selected: CardboardUnit
 var status_label: Label
 var details_label: Label
+var score_label: Label
 var event_label: Label
 var grid_overlay: MeshInstance3D
 var rng := RandomNumberGenerator.new()
@@ -28,6 +29,7 @@ func _ready() -> void:
 	_build_lights()
 	_build_ui()
 	_spawn_demo_armies()
+	_spawn_cities()
 	state.state_changed.connect(_refresh_ui)
 	state.log_message.connect(_show_event)
 	_refresh_ui()
@@ -158,6 +160,10 @@ func _build_ui() -> void:
 	details_label.text = "Seleziona una pedina attiva, poi un esagono di destinazione."
 	details_label.add_theme_color_override("font_color", Color("dfd0b7"))
 	stack.add_child(details_label)
+	score_label = Label.new()
+	score_label.add_theme_font_size_override("font_size", 14)
+	score_label.add_theme_color_override("font_color", Color("cbb68f"))
+	stack.add_child(score_label)
 	var buttons := HBoxContainer.new()
 	stack.add_child(buttons)
 	var next := Button.new()
@@ -206,6 +212,21 @@ func _spawn_demo_armies() -> void:
 			var offset := Vector2i(index % 2, index / 2)
 			_spawn_unit(faction, unit_type, base + offset)
 			index += 1
+
+func _spawn_cities() -> void:
+	var locations := {
+		&"Cavalieri": [Vector2i(1, 1), Vector2i(3, 1), Vector2i(5, 1), Vector2i(1, 3), Vector2i(3, 5), Vector2i(5, 3)],
+		&"Draghi": [Vector2i(12, 1), Vector2i(14, 1), Vector2i(16, 1), Vector2i(12, 3), Vector2i(14, 5), Vector2i(16, 3)],
+		&"Alati": [Vector2i(1, 8), Vector2i(3, 10), Vector2i(5, 10), Vector2i(1, 10), Vector2i(3, 7), Vector2i(5, 8)],
+		&"Monaci": [Vector2i(12, 10), Vector2i(14, 10), Vector2i(16, 10), Vector2i(12, 8), Vector2i(14, 6), Vector2i(16, 8)],
+	}
+	for faction in ZargosRules.FACTIONS:
+		for city_hex in locations[faction]:
+			var city := CardboardCity.new()
+			add_child(city)
+			city.setup(faction, city_hex)
+			city.position = hex_to_world(city_hex) + Vector3(0, 0.19, 0)
+			state.register_city(faction)
 
 func _spawn_unit(faction: StringName, unit_type: StringName, hex: Vector2i) -> void:
 	var unit := CardboardUnit.new()
@@ -267,6 +288,8 @@ func _pick_at(screen_position: Vector2) -> void:
 			_resolve_attack(selected, collider)
 		else:
 			_select_unit(collider)
+	elif collider is CardboardCity:
+		_try_enter_city(collider)
 	elif collider.has_meta("is_board") and selected:
 		_try_move_selected(world_to_hex(hit.position))
 
@@ -307,6 +330,31 @@ func _unit_at(hex: Vector2i) -> CardboardUnit:
 		if child is CardboardUnit and child.hex == hex:
 			return child
 	return null
+
+func _try_enter_city(city: CardboardCity) -> void:
+	if not selected or state.phase != ZargosRules.Phase.MOVEMENT:
+		_show_event("Seleziona una tua pedina durante la fase Movimento per entrare in città.")
+		return
+	if selected.faction != state.active_faction() or selected.moved:
+		_show_event("La pedina selezionata non può muovere ora.")
+		return
+	var distance := ZargosRules.hex_distance(selected.hex, city.hex)
+	if distance > selected.movement:
+		_show_event("La città è oltre il movimento massimo della pedina.")
+		return
+	if _unit_at(city.hex):
+		_show_event("La città è già occupata da una pedina.")
+		return
+	var old_owner := city.faction
+	selected.hex = city.hex
+	selected.position = hex_to_world(city.hex) + Vector3(0, 0.34, 0)
+	selected.moved = true
+	if old_owner != selected.faction:
+		city.change_owner(selected.faction)
+		state.capture_city(old_owner, selected.faction)
+		_show_event("I %s conquistano una città dei %s." % [selected.faction, old_owner])
+	else:
+		_show_event("%s entra in una città amica." % selected.unit_type)
 
 func _on_next_phase() -> void:
 	var old_faction := state.active_faction()
@@ -432,6 +480,9 @@ func _find_adjacent_enemy(unit: CardboardUnit) -> CardboardUnit:
 
 func _refresh_ui() -> void:
 	status_label.text = state.summary()
+	score_label.text = "Città: " + state.city_score()
+	if state.game_over:
+		_show_event("Fine della partita • Vincitori: %s" % ", ".join(state.winners()))
 
 func _show_event(message: String) -> void:
 	event_label.text = message

@@ -26,6 +26,8 @@ Il repository contiene per ora il materiale di riferimento del gioco base:
 - risoluzione di eliminazioni e arretramenti, inclusa la fuga bloccata;
 - frecce, fiamme e visioni selezionando direttamente il bersaglio;
 - accumulo dei colpi a distanza sullo stesso bersaglio nel turno;
+- città tridimensionali, conquista e conteggio per fazione;
+- determinazione del vincitore in base alle città controllate al 25º mese;
 - test automatici delle regole e degli esempi del manuale.
 
 I terreni definitivi, gli schieramenti, gli avversari IA e il multiplayer Firebase verranno aggiunti nelle fasi successive.
