@@ -8,6 +8,8 @@ var combat := 0
 var ability := ""
 var hex := Vector2i.ZERO
 var moved := false
+var acted := false
+var ranged_hits := 0
 
 func setup(p_faction: StringName, p_type: StringName, p_hex: Vector2i) -> void:
 	faction = p_faction
@@ -55,4 +57,9 @@ func _build_mesh() -> void:
 
 func set_selected(value: bool) -> void:
 	scale = Vector3.ONE * (1.18 if value else 1.0)
+
+func reset_turn() -> void:
+	moved = false
+	acted = false
+	ranged_hits = 0
 

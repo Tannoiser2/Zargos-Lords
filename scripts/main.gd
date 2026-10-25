@@ -314,7 +314,7 @@ func _on_next_phase() -> void:
 	if state.phase == ZargosRules.Phase.ALLIANCES or state.active_faction() != old_faction:
 		for child in get_children():
 			if child is CardboardUnit:
-				child.moved = false
+				child.reset_turn()
 	_select_unit(null)
 
 func _on_resolve_battle() -> void:
@@ -334,9 +334,17 @@ func _resolve_attack(attacker: CardboardUnit, defender: CardboardUnit) -> void:
 	if attacker.faction == defender.faction:
 		_show_event("Non puoi attaccare una pedina del tuo popolo.")
 		return
-	if ZargosRules.hex_distance(attacker.hex, defender.hex) != 1:
+	if attacker.acted:
+		_show_event("Questa pedina ha già agito nella fase di combattimento.")
+		return
+	var distance := ZargosRules.hex_distance(attacker.hex, defender.hex)
+	if distance > 1 and attacker.ability in ["Tiro", "Fiamme", "Visione"]:
+		_resolve_ranged_attack(attacker, defender, distance)
+		return
+	if distance != 1:
 		_show_event("Il combattimento normale richiede un nemico adiacente.")
 		return
+	attacker.acted = true
 	var die := rng.randi_range(1, 6)
 	var result := ZargosRules.resolve_combat(attacker.combat, defender.combat, die)
 	_show_event("Dado %d • %s contro %s: %s [%s]" % [die, attacker.unit_type, defender.unit_type, result.text, result.result])
@@ -348,6 +356,40 @@ func _resolve_attack(attacker: CardboardUnit, defender: CardboardUnit) -> void:
 			var retreating := defender if result.retreat > 0 else attacker
 			var threat := attacker if result.retreat > 0 else defender
 			_retreat_unit(retreating, threat, absi(result.retreat))
+
+func _resolve_ranged_attack(attacker: CardboardUnit, defender: CardboardUnit, distance: int) -> void:
+	var die := rng.randi_range(1, 6)
+	attacker.acted = true
+	match attacker.ability:
+		"Tiro":
+			if distance > 8:
+				_show_event("Bersaglio oltre la gittata massima degli arcieri.")
+				attacker.acted = false
+				return
+			_apply_ranged_hits(defender, die, ZargosRules.arrow_hits(die, distance), "Frecce")
+		"Fiamme":
+			if distance > 5:
+				_show_event("Bersaglio oltre la gittata massima delle fiamme.")
+				attacker.acted = false
+				return
+			_apply_ranged_hits(defender, die, ZargosRules.fire_hits(die, distance), "Fiamme")
+		"Visione":
+			if distance > 5:
+				_show_event("Bersaglio oltre la gittata massima della visione.")
+				attacker.acted = false
+				return
+			var retreat := ZargosRules.vision_retreat(die, distance, defender.movement)
+			_show_event("Visione • dado %d • distanza %d: %s arretra di %d" % [die, distance, defender.unit_type, retreat])
+			if retreat > 0:
+				_retreat_unit(defender, attacker, retreat)
+
+func _apply_ranged_hits(defender: CardboardUnit, die: int, hits: int, attack_name: String) -> void:
+	defender.ranged_hits += hits
+	var required := maxi(1, defender.combat)
+	_show_event("%s • dado %d: %d colpi su %s (%d/%d)" % [attack_name, die, hits, defender.unit_type, defender.ranged_hits, required])
+	if defender.ranged_hits >= required:
+		_show_event(event_label.text + " • bersaglio eliminato")
+		_eliminate_unit(defender)
 
 func _retreat_unit(unit: CardboardUnit, threat: CardboardUnit, distance: int) -> void:
 	var current := unit.hex

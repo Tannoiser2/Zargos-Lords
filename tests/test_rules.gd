@@ -15,6 +15,8 @@ func _init() -> void:
 	assert(ZargosRules.fire_hits(4, 5, true) == 2)
 	assert(ZargosRules.vision_retreat(1, 1, 7) == 5)
 	assert(ZargosRules.vision_retreat(6, 1, 7) == 7)
+	assert(ZargosRules.arrow_hits(5, 1) == 3)
+	assert(ZargosRules.fire_hits(6, 1) == 4)
 	var state := ZargosGameState.new()
 	for i in range(3): state.advance_phase()
 	assert(state.active_faction() == &"Draghi")
