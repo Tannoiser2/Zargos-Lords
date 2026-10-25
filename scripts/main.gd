@@ -355,8 +355,8 @@ func _spawn_armies(territory_owners: Dictionary) -> void:
 func _spawn_cities(territory_owners: Dictionary) -> void:
 	var locations := {
 		&"Cavalieri": [Vector2i(6, 4), Vector2i(9, 4), Vector2i(12, 5), Vector2i(6, 8), Vector2i(10, 9), Vector2i(13, 8)],
-		&"Draghi": [Vector2i(23, 4), Vector2i(27, 4), Vector2i(31, 5), Vector2i(23, 8), Vector2i(27, 9), Vector2i(31, 8)],
-		&"Alati": [Vector2i(5, 16), Vector2i(8, 20), Vector2i(12, 21), Vector2i(6, 21), Vector2i(10, 16), Vector2i(14, 18)],
+		&"Draghi": [Vector2i(23, 4), Vector2i(27, 4), Vector2i(31, 5), Vector2i(23, 8), Vector2i(28, 8), Vector2i(31, 8)],
+		&"Alati": [Vector2i(5, 16), Vector2i(8, 20), Vector2i(11, 20), Vector2i(6, 21), Vector2i(10, 16), Vector2i(14, 18)],
 		&"Monaci": [Vector2i(22, 21), Vector2i(26, 21), Vector2i(31, 20), Vector2i(23, 16), Vector2i(27, 15), Vector2i(31, 17)],
 	}
 	for territory: StringName in territory_owners:

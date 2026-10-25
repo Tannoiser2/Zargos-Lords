@@ -2,7 +2,7 @@ class_name ZargosRules
 extends RefCounted
 
 enum Phase { ALLIANCES, MOVEMENT, COMBAT }
-enum Terrain { PLAIN, FOREST, MOUNTAIN, SEA, CLOUD_BRIDGE, MAGIC_VORTEX, CITY }
+enum Terrain { PLAIN, FOREST, MOUNTAIN, SEA, CLOUD_BRIDGE, MAGIC_VORTEX, CITY, VOID }
 
 const FACTIONS := [&"Cavalieri", &"Draghi", &"Alati", &"Monaci"]
 const MONTH_LIMIT := 25
@@ -90,7 +90,7 @@ const UNIT_TYPES := {
 }
 
 static func terrain_cost(terrain: Terrain, flying: bool = false) -> int:
-	if terrain == Terrain.SEA:
+	if terrain in [Terrain.SEA, Terrain.VOID]:
 		return -1
 	if terrain == Terrain.MAGIC_VORTEX:
 		return 1

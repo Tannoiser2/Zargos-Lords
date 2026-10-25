@@ -33,6 +33,7 @@ Il repository contiene per ora il materiale di riferimento del gioco base:
 - guarnigioni nascoste fino a quattro unità e uscita dalla città;
 - assedio con più attaccanti, numero minimo richiesto, forza combinata della guarnigione e risultati speciali per le città;
 - percorso esagonale con costi di boschi, montagne, mari, ponti e gorghi;
+- prima maschera verificata degli esagoni marini e degli spazi esterni non transitabili;
 - bonus difensivi del terreno applicati al combattimento;
 - determinazione del vincitore in base alle città controllate al 25º mese;
 - modalità solitaria con popolo umano selezionabile e avversari controllati dall'IA;

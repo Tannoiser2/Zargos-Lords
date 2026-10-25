@@ -5,6 +5,7 @@ func _init() -> void:
 	assert(ZargosRules.hex_distance(Vector2i(3, 3), Vector2i(4, 3)) == 1)
 	assert(ZargosRules.terrain_cost(ZargosRules.Terrain.FOREST) == 2)
 	assert(ZargosRules.terrain_cost(ZargosRules.Terrain.SEA) == -1)
+	assert(ZargosRules.terrain_cost(ZargosRules.Terrain.VOID) == -1)
 	assert(ZargosRules.defense_bonus(ZargosRules.Terrain.MOUNTAIN) == 3)
 	assert(ZargosRules.resolve_combat(12, 5, 4).result == "D3")
 	assert(ZargosRules.resolve_combat(10, 5, 6).result == "DE")
