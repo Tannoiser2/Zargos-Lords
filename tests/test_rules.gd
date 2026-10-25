@@ -38,6 +38,8 @@ func _init() -> void:
 	assert(board.terrain_at(Vector2i(8, 5)) == ZargosRules.Terrain.MAGIC_VORTEX)
 	assert(board.terrain_at(Vector2i(18, 0)) == ZargosRules.Terrain.VOID)
 	assert(board.terrain_at(Vector2i(6, 10)) == ZargosRules.Terrain.SEA)
+	assert(board.terrain_at(Vector2i(8, 12)) == ZargosRules.Terrain.CLOUD_BRIDGE)
+	assert(ZargosRules.terrain_cost(board.terrain_at(Vector2i(8, 12)), true) == 1)
 	board.set_terrain(Vector2i(2, 4), ZargosRules.Terrain.FOREST)
 	board.set_terrain(Vector2i(8, 0), ZargosRules.Terrain.SEA)
 	board.set_terrain(Vector2i(6, 3), ZargosRules.Terrain.MOUNTAIN)

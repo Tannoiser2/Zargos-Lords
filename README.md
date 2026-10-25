@@ -39,6 +39,7 @@ Il repository contiene per ora il materiale di riferimento del gioco base:
 - percorso esagonale con costi di boschi, montagne, mari, ponti e gorghi;
 - reticolo 36 × 24 calibrato sui centri degli esagoni stampati della scansione originale;
 - maschera completa di mare, laghi e spazi centrali esterni non transitabili;
+- corridoi dei ponti di nuvole della fascia equatoriale distinti dal mare aperto;
 - orientamento corretto delle annotazioni di boschi, montagne e gorghi magici sui quattro continenti;
 - reticolo di calibrazione attivabile e lettura di coordinate e terreno facendo clic sulla mappa;
 - bonus difensivi del terreno applicati al combattimento;
@@ -46,7 +47,7 @@ Il repository contiene per ora il materiale di riferimento del gioco base:
 - modalità solitaria con popolo umano selezionabile e avversari controllati dall'IA;
 - test automatici delle regole e degli esempi del manuale.
 
-La verifica manuale finale delle coste e dei ponti di nuvole, lo schieramento libero completo e il multiplayer Firebase verranno aggiunti nelle fasi successive.
+La verifica manuale finale delle coste e le cuciture alfabetiche oltre bordo, lo schieramento libero completo e il multiplayer Firebase verranno aggiunti nelle fasi successive.
 
 ## Avvio
 

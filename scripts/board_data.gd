@@ -37,6 +37,21 @@ func _init() -> void:
 	]
 	for hex in void_hexes:
 		terrain[hex] = ZargosRules.Terrain.VOID
+	# Corridoi di nuvole verificati sulla fascia equatoriale della scansione.
+	# Sono distinti dal mare: anche le unità volanti possono attraversarli, ma
+	# soltanto seguendo il ponte da una costa all'altra.
+	var cloud_bridge_hexes: Array[Vector2i] = [
+		Vector2i(0, 13),
+		Vector2i(4, 12),
+		Vector2i(8, 12), Vector2i(9, 11),
+		Vector2i(12, 11), Vector2i(12, 12), Vector2i(13, 12), Vector2i(14, 12), Vector2i(15, 11),
+		Vector2i(20, 9), Vector2i(20, 10), Vector2i(20, 11), Vector2i(20, 13),
+		Vector2i(22, 10), Vector2i(22, 11), Vector2i(22, 12),
+		Vector2i(28, 13),
+		Vector2i(35, 11), Vector2i(35, 12),
+	]
+	for hex in cloud_bridge_hexes:
+		terrain[hex] = ZargosRules.Terrain.CLOUD_BRIDGE
 	var forest_hexes: Array[Vector2i] = [
 		# Continente nord-occidentale
 		Vector2i(1, 17), Vector2i(3, 20), Vector2i(4, 20), Vector2i(8, 21),
