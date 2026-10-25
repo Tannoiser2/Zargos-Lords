@@ -34,9 +34,27 @@ var reappearing_unit: CardboardUnit
 var deployment_mode := false
 var deployment_city: CardboardCity
 var territory_owners: Dictionary = {}
+var online: FirebaseOnline
+var online_mode := false
+var online_is_host := false
+var online_host_faction: StringName = &""
+var applying_remote_snapshot := false
+var online_pending_action := ""
+var online_player_count := 2
+var online_human_index := 0
+var firebase_url_input: LineEdit
+var firebase_key_input: LineEdit
+var room_code_input: LineEdit
 
 func _ready() -> void:
 	rng.randomize()
+	online = FirebaseOnline.new()
+	add_child(online)
+	online.authenticated.connect(_on_online_authenticated)
+	online.room_created.connect(_on_room_created)
+	online.room_joined.connect(_on_room_joined)
+	online.snapshot_received.connect(_apply_online_snapshot)
+	online.online_error.connect(func(message: String): _show_event(message))
 	_build_environment()
 	_build_board()
 	_build_hex_overlay()
@@ -298,9 +316,9 @@ func _build_setup_screen() -> void:
 	shade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	setup_layer.add_child(shade)
 	var panel := PanelContainer.new()
-	panel.custom_minimum_size = Vector2(470, 420)
+	panel.custom_minimum_size = Vector2(540, 650)
 	panel.set_anchors_preset(Control.PRESET_CENTER)
-	panel.position = Vector2(-235, -210)
+	panel.position = Vector2(-270, -325)
 	var style := StyleBoxFlat.new()
 	style.bg_color = Color("2b190f")
 	style.border_color = Color("c49342")
@@ -350,6 +368,35 @@ func _build_setup_screen() -> void:
 	start.add_theme_font_size_override("font_size", 19)
 	start.pressed.connect(func(): _start_new_game(player_count.get_selected_id(), faction_choice.selected))
 	stack.add_child(start)
+	var online_separator := HSeparator.new()
+	stack.add_child(online_separator)
+	var online_title := Label.new()
+	online_title.text = "PARTITA ONLINE FIREBASE"
+	online_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	online_title.add_theme_color_override("font_color", Color("e5b75b"))
+	stack.add_child(online_title)
+	firebase_url_input = LineEdit.new()
+	firebase_url_input.placeholder_text = "Realtime Database URL (https://…firebasedatabase.app)"
+	stack.add_child(firebase_url_input)
+	firebase_key_input = LineEdit.new()
+	firebase_key_input.placeholder_text = "Firebase Web API key"
+	stack.add_child(firebase_key_input)
+	room_code_input = LineEdit.new()
+	room_code_input.placeholder_text = "Codice stanza (vuoto = generato automaticamente)"
+	room_code_input.max_length = 8
+	stack.add_child(room_code_input)
+	var online_buttons := HBoxContainer.new()
+	stack.add_child(online_buttons)
+	var host := Button.new()
+	host.text = "Crea stanza"
+	host.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	host.pressed.connect(func(): _begin_online("create", player_count.get_selected_id(), faction_choice.selected))
+	online_buttons.add_child(host)
+	var join := Button.new()
+	join.text = "Entra nella stanza"
+	join.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	join.pressed.connect(func(): _begin_online("join", player_count.get_selected_id(), faction_choice.selected))
+	online_buttons.add_child(join)
 
 func _start_new_game(player_count: int, human_index: int) -> void:
 	human_faction = ZargosRules.FACTIONS[human_index]
@@ -373,6 +420,61 @@ func _start_new_game(player_count: int, human_index: int) -> void:
 	_show_event("Schieramento dei %s: seleziona una pedina o città, poi un esagono libero del tuo continente." % human_faction)
 	details_label.text = "SCHIERAMENTO • Disponi le tue forze, poi premi Termina schieramento."
 	_refresh_ui()
+
+func _begin_online(action: String, player_count: int, human_index: int) -> void:
+	if not online.configure(firebase_url_input.text, firebase_key_input.text):
+		return
+	online_pending_action = action
+	online_player_count = player_count
+	online_human_index = human_index
+	_show_event("Connessione a Firebase…")
+	online.authenticate_anonymously()
+
+func _on_online_authenticated() -> void:
+	var requested_code := FirebaseOnline.normalize_room_code(room_code_input.text)
+	if online_pending_action == "create":
+		online_mode = true
+		online_is_host = true
+		_start_new_game(online_player_count, online_human_index)
+		online_host_faction = human_faction
+		var code := requested_code if not requested_code.is_empty() else FirebaseOnline.generate_room_code()
+		online.create_room(code, _make_online_snapshot())
+	elif online_pending_action == "join":
+		if requested_code.length() < 4:
+			_show_event("Inserisci un codice stanza di almeno 4 caratteri.")
+			return
+		online.join_room(requested_code)
+
+func _on_room_created(code: String, _data: Dictionary) -> void:
+	online_pending_action = ""
+	online.start_polling()
+	_show_event("Stanza %s creata. Comunica questo codice agli altri giocatori." % code)
+
+func _on_room_joined(code: String, data: Dictionary) -> void:
+	online_pending_action = ""
+	online_mode = true
+	online_is_host = false
+	if data.get("state") is Dictionary:
+		var remote_state: Dictionary = data.state
+		var requested_faction := String(ZargosRules.FACTIONS[online_human_index])
+		var remote_factions: Array = remote_state.get("factions", [])
+		var host_faction := String(remote_state.get("host_faction", ""))
+		online_host_faction = StringName(host_faction)
+		if requested_faction in remote_factions and requested_faction != host_faction:
+			human_faction = StringName(requested_faction)
+		else:
+			for candidate in remote_factions:
+				if String(candidate) != host_faction:
+					human_faction = StringName(String(candidate))
+					break
+		_apply_online_snapshot(data.state)
+	if is_instance_valid(setup_layer):
+		setup_layer.queue_free()
+	ai_enabled = false
+	ai_button.button_pressed = false
+	ai_button.disabled = true
+	online.start_polling()
+	_show_event("Collegato alla stanza %s come %s." % [code, human_faction])
 
 func _territory_owners(active: Array[StringName]) -> Dictionary:
 	var territories := ZargosRules.FACTIONS
@@ -422,6 +524,120 @@ func _spawn_unit(faction: StringName, unit_type: StringName, hex: Vector2i) -> v
 	add_child(unit)
 	unit.setup(faction, unit_type, hex)
 	unit.position = hex_to_world(hex) + Vector3(0, 0.18, 0)
+
+func _make_online_snapshot() -> Dictionary:
+	var units: Array[CardboardUnit] = []
+	var cities: Array[CardboardCity] = []
+	for child in get_children():
+		if child is CardboardUnit:
+			units.append(child)
+		elif child is CardboardCity:
+			cities.append(child)
+	var unit_ids := {}
+	for index in range(units.size()):
+		unit_ids[units[index]] = index
+	var unit_data: Array[Dictionary] = []
+	for unit in units:
+		unit_data.append({
+			"faction": String(unit.faction), "type": String(unit.unit_type),
+			"x": unit.hex.x, "y": unit.hex.y, "moved": unit.moved, "acted": unit.acted,
+			"hits": unit.ranged_hits, "visible": unit.visible, "vanished": unit.vanished,
+			"vanished_month": unit.vanished_month, "vanish_x": unit.vanish_origin.x, "vanish_y": unit.vanish_origin.y,
+			"facing": unit.facing_direction, "charge": unit.charge_ready, "charge_direction": unit.charge_direction,
+			"guard_target": unit_ids.get(unit.guard_target, -1), "guard_unit": unit_ids.get(unit.guard_unit, -1),
+		})
+	var city_data: Array[Dictionary] = []
+	for city in cities:
+		var garrison_ids: Array[int] = []
+		for unit in city.garrison:
+			if unit_ids.has(unit):
+				garrison_ids.append(unit_ids[unit])
+		city_data.append({"faction": String(city.faction), "x": city.hex.x, "y": city.hex.y, "garrison": garrison_ids})
+	var owners := {}
+	for continent in territory_owners:
+		owners[String(continent)] = String(territory_owners[continent])
+	var scores := {}
+	for faction in ZargosRules.FACTIONS:
+		scores[String(faction)] = int(state.cities.get(faction, 0))
+	return {
+		"month": state.month, "active_index": state.active_faction_index, "phase": state.phase,
+		"game_over": state.game_over, "factions": Array(state.factions).map(func(value): return String(value)),
+		"host_faction": String(online_host_faction),
+		"scores": scores, "territory_owners": owners, "deployment": deployment_mode,
+		"units": unit_data, "cities": city_data,
+	}
+
+func _apply_online_snapshot(snapshot: Dictionary) -> void:
+	if applying_remote_snapshot or not snapshot.has("factions"):
+		return
+	applying_remote_snapshot = true
+	_clear_deployment_selection()
+	for child in get_children():
+		if child is CardboardUnit or child is CardboardCity:
+			remove_child(child)
+			child.queue_free()
+	var factions: Array[StringName] = []
+	for faction in snapshot.get("factions", []):
+		factions.append(StringName(String(faction)))
+	state.configure(factions)
+	state.month = int(snapshot.get("month", 1))
+	state.active_faction_index = clampi(int(snapshot.get("active_index", 0)), 0, maxi(0, factions.size() - 1))
+	state.phase = int(snapshot.get("phase", ZargosRules.Phase.ALLIANCES)) as ZargosRules.Phase
+	state.game_over = bool(snapshot.get("game_over", false))
+	for faction in ZargosRules.FACTIONS:
+		state.cities[faction] = int(snapshot.get("scores", {}).get(String(faction), 0))
+	territory_owners.clear()
+	for continent in snapshot.get("territory_owners", {}):
+		territory_owners[StringName(continent)] = StringName(snapshot.territory_owners[continent])
+	deployment_mode = bool(snapshot.get("deployment", false))
+	deployment_button.visible = deployment_mode and (not online_mode or online_is_host)
+	var units: Array[CardboardUnit] = []
+	for data in snapshot.get("units", []):
+		var unit := CardboardUnit.new()
+		add_child(unit)
+		unit.setup(StringName(data.get("faction", "")), StringName(data.get("type", "")), Vector2i(int(data.get("x", 0)), int(data.get("y", 0))))
+		unit.moved = bool(data.get("moved", false))
+		unit.acted = bool(data.get("acted", false))
+		unit.ranged_hits = int(data.get("hits", 0))
+		unit.vanished = bool(data.get("vanished", false))
+		unit.vanished_month = int(data.get("vanished_month", 0))
+		unit.vanish_origin = Vector2i(int(data.get("vanish_x", 0)), int(data.get("vanish_y", 0)))
+		unit.facing_direction = int(data.get("facing", -1))
+		unit.charge_ready = bool(data.get("charge", false))
+		unit.charge_direction = int(data.get("charge_direction", -1))
+		unit.visible = bool(data.get("visible", true))
+		unit.collision_layer = 1 if unit.visible else 0
+		unit.collision_mask = 1 if unit.visible else 0
+		unit.position = hex_to_world(unit.hex) + Vector3(0, 0.18, 0)
+		units.append(unit)
+	var unit_records: Array = snapshot.get("units", [])
+	for index in range(mini(units.size(), unit_records.size())):
+		var target_index := int(unit_records[index].get("guard_target", -1))
+		var guard_index := int(unit_records[index].get("guard_unit", -1))
+		units[index].guard_target = units[target_index] if target_index >= 0 and target_index < units.size() else null
+		units[index].guard_unit = units[guard_index] if guard_index >= 0 and guard_index < units.size() else null
+	for data in snapshot.get("cities", []):
+		var city := CardboardCity.new()
+		add_child(city)
+		city.setup(StringName(data.get("faction", "")), Vector2i(int(data.get("x", 0)), int(data.get("y", 0))))
+		city.position = hex_to_world(city.hex) + Vector3(0, 0.19, 0)
+		for unit_index in data.get("garrison", []):
+			var index := int(unit_index)
+			if index >= 0 and index < units.size():
+				city.garrison.append(units[index])
+	state.state_changed.emit()
+	applying_remote_snapshot = false
+
+func _schedule_online_publish(delay := 0.0) -> void:
+	if not online_mode or applying_remote_snapshot or online.room_code.is_empty():
+		return
+	if delay <= 0.0:
+		online.publish_snapshot(_make_online_snapshot())
+	else:
+		get_tree().create_timer(delay).timeout.connect(func():
+			if online_mode and not applying_remote_snapshot:
+				online.publish_snapshot(_make_online_snapshot())
+		, CONNECT_ONE_SHOT)
 
 func hex_to_world(hex: Vector2i) -> Vector3:
 	var row_height := HEX_RADIUS * sqrt(3.0)
@@ -477,6 +693,9 @@ func _pick_at(screen_position: Vector2) -> void:
 		if deployment_mode:
 			_select_deployment_unit(collider)
 			return
+		if online_mode and state.active_faction() != human_faction:
+			_show_event("Attendi la mossa dei %s." % state.active_faction())
+			return
 		if state.phase == ZargosRules.Phase.COMBAT and collider.faction == state.active_faction():
 			_toggle_combat_attacker(collider)
 		elif selected and collider != selected and state.phase == ZargosRules.Phase.COMBAT:
@@ -489,6 +708,9 @@ func _pick_at(screen_position: Vector2) -> void:
 	elif collider is CardboardCity:
 		if deployment_mode:
 			_select_deployment_city(collider)
+			return
+		if online_mode and state.active_faction() != human_faction:
+			_show_event("Attendi la mossa dei %s." % state.active_faction())
 			return
 		_handle_city_click(collider)
 	elif collider.has_meta("is_board"):
@@ -516,6 +738,9 @@ func _terrain_name(terrain_type: ZargosRules.Terrain) -> String:
 		_: return "Pianura"
 
 func _select_unit(unit: CardboardUnit) -> void:
+	if online_mode and unit and unit.faction != human_faction:
+		_show_event("In questa sessione controlli soltanto i %s." % human_faction)
+		return
 	_clear_combat_group()
 	if selected:
 		selected.set_selected(false)
@@ -587,6 +812,7 @@ func _try_deployment_move(destination: Vector2i) -> void:
 		deployment_city.hex = destination
 		deployment_city.position = hex_to_world(destination) + Vector3(0, 0.19, 0)
 		_show_event("Città schierata sul continente %s, esagono %d,%d." % [continent, destination.x, destination.y])
+	_schedule_online_publish()
 
 func _finish_deployment() -> void:
 	if not deployment_mode:
@@ -595,10 +821,13 @@ func _finish_deployment() -> void:
 	deployment_mode = false
 	deployment_button.visible = false
 	ai_button.disabled = false
-	ai_button.button_pressed = true
+	ai_button.button_pressed = not online_mode
+	if online_mode:
+		ai_button.disabled = true
 	_show_event("Schieramento completato. La Guerra dei Signori ha inizio: tu controlli i %s." % human_faction)
 	details_label.text = "Seleziona una pedina attiva, poi un esagono di destinazione."
 	_refresh_ui()
+	_schedule_online_publish()
 
 func _toggle_combat_attacker(unit: CardboardUnit) -> void:
 	if unit.acted:
@@ -672,6 +901,7 @@ func _try_move_selected(destination: Vector2i) -> void:
 	if selected.charge_ready:
 		movement_note += " • carica rettilinea pronta"
 	_show_event("%s spostato • costo %d/%d • terreno %s%s." % [selected.unit_type, movement_cost, selected.movement, terrain_name, movement_note])
+	_schedule_online_publish()
 
 func _unit_at(hex: Vector2i) -> CardboardUnit:
 	var units := _units_at(hex)
@@ -779,6 +1009,7 @@ func _on_monk_power() -> void:
 		selected = null
 		movement_overlay.mesh = null
 		_update_special_button()
+		_schedule_online_publish()
 		return
 	reappearing_unit = _next_vanished_monk()
 	if not reappearing_unit:
@@ -842,6 +1073,7 @@ func _try_reappear(destination: Vector2i) -> void:
 	unit.acted = false
 	_select_unit(unit)
 	_show_event("Il Monaco ricompare e può muovere e combattere normalmente.")
+	_schedule_online_publish()
 
 func _movement_blocked(hex: Vector2i, moving_faction: StringName, flying: bool) -> bool:
 	var unit := _unit_at(hex)
@@ -946,6 +1178,7 @@ func _try_enter_city(city: CardboardCity) -> void:
 		else:
 			selected.position = hex_to_world(city.hex) + Vector3(0, 0.34, 0)
 			_show_event("Guarnigione completa: la pedina resta sopra la città.")
+	_schedule_online_publish()
 
 func _release_garrison(city: CardboardCity) -> void:
 	if city.faction != state.active_faction():
@@ -964,6 +1197,7 @@ func _release_garrison(city: CardboardCity) -> void:
 	unit.position = hex_to_world(unit.hex) + Vector3(0, 0.18, 0)
 	unit.moved = true
 	_show_event("%s esce dalla guarnigione." % unit.unit_type)
+	_schedule_online_publish()
 
 func _resolve_siege(attacker: CardboardUnit, city: CardboardCity) -> void:
 	if attacker.faction != state.active_faction() or attacker.acted:
@@ -1001,6 +1235,7 @@ func _resolve_siege(attacker: CardboardUnit, city: CardboardCity) -> void:
 		_eliminate_unit(attacker)
 	elif code.begins_with("A"):
 		_retreat_unit(attacker, _city_threat_proxy(city), int(code.right(1)))
+	_schedule_online_publish(0.4)
 
 func _resolve_group_siege(city: CardboardCity) -> void:
 	var attackers := combat_group.duplicate()
@@ -1044,6 +1279,7 @@ func _resolve_group_siege(city: CardboardCity) -> void:
 	else:
 		for attacker in attackers:
 			_retreat_unit(attacker, _city_threat_proxy(city), int(code.right(1)))
+	_schedule_online_publish(0.4)
 
 func _city_threat_proxy(city: CardboardCity) -> CardboardUnit:
 	# Unità temporanea non inserita nell'albero: serve solo come origine geometrica della fuga.
@@ -1055,6 +1291,9 @@ func _on_next_phase() -> void:
 	if deployment_mode:
 		_show_event("Termina prima lo schieramento iniziale.")
 		return
+	if online_mode and state.active_faction() != human_faction:
+		_show_event("Attendi la mossa dei %s." % state.active_faction())
+		return
 	var old_faction := state.active_faction()
 	state.advance_phase()
 	if state.phase == ZargosRules.Phase.ALLIANCES or state.active_faction() != old_faction:
@@ -1063,6 +1302,7 @@ func _on_next_phase() -> void:
 				child.reset_turn()
 	reappearing_unit = null
 	_select_unit(null)
+	_schedule_online_publish()
 
 func _on_resolve_battle() -> void:
 	if deployment_mode:
@@ -1109,6 +1349,7 @@ func _resolve_attack(attacker: CardboardUnit, defender: CardboardUnit) -> void:
 			var retreating := defender if result.retreat > 0 else attacker
 			var threat := attacker if result.retreat > 0 else defender
 			_retreat_unit(retreating, threat, absi(result.retreat))
+	_schedule_online_publish(0.4)
 
 func _resolve_group_attack(defender: CardboardUnit) -> void:
 	if defender.faction == state.active_faction():
@@ -1144,6 +1385,7 @@ func _resolve_group_attack(defender: CardboardUnit) -> void:
 			else:
 				for attacker in attackers:
 					_retreat_unit(attacker, defender, absi(result.retreat))
+	_schedule_online_publish(0.4)
 
 func _resolve_ranged_attack(attacker: CardboardUnit, defender: CardboardUnit, distance: int) -> void:
 	var die := rng.randi_range(1, 6)
@@ -1176,6 +1418,7 @@ func _resolve_ranged_attack(attacker: CardboardUnit, defender: CardboardUnit, di
 			_show_event("Visione • dado %d • distanza %d: %s arretra di %d" % [die, distance, defender.unit_type, retreat])
 			if retreat > 0:
 				_retreat_unit(defender, attacker, retreat)
+	_schedule_online_publish(0.4)
 
 func _arrow_line_result(attacker: CardboardUnit, defender: CardboardUnit) -> Dictionary:
 	if board_data.terrain_at(attacker.hex) == ZargosRules.Terrain.FOREST:
@@ -1295,6 +1538,8 @@ func _find_adjacent_enemy(unit: CardboardUnit) -> CardboardUnit:
 func _refresh_ui() -> void:
 	status_label.text = state.summary()
 	score_label.text = "Città: " + state.city_score()
+	if online_mode and not online.room_code.is_empty():
+		score_label.text += "  •  Online %s" % online.room_code
 	if state.game_over:
 		_show_event("Fine della partita • Vincitori: %s" % ", ".join(state.winners()))
 	elif not deployment_mode and ai_enabled and state.active_faction() != human_faction and not ai_running:

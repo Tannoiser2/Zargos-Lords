@@ -32,6 +32,7 @@ jobs:
         run: |
           /tmp/godot-bin/Godot_v4.7-stable_linux.x86_64 --headless --path . --editor --quit
           /tmp/godot-bin/Godot_v4.7-stable_linux.x86_64 --headless --path . --script res://tests/test_rules.gd
+          /tmp/godot-bin/Godot_v4.7-stable_linux.x86_64 --headless --path . --script res://tests/test_online_snapshot.gd
       - name: Esporta la build Web
         run: |
           mkdir -p build/web

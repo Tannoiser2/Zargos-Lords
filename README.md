@@ -48,10 +48,11 @@ Il repository contiene per ora il materiale di riferimento del gioco base:
 - bonus difensivi del terreno applicati al combattimento;
 - determinazione del vincitore in base alle città controllate al 25º mese;
 - modalità solitaria con popolo umano selezionabile e avversari controllati dall'IA;
-- infrastruttura Firebase REST per autenticazione anonima, stanze a codice e sincronizzazione degli snapshot;
+- lobby Firebase REST per autenticazione anonima, creazione e accesso a stanze tramite codice;
+- sincronizzazione online di turno, schieramento, pedine, scorte, città e guarnigioni;
 - test automatici delle regole e degli esempi del manuale.
 
-La verifica manuale finale delle coste e il collegamento della lobby Firebase all'interfaccia verranno aggiunti nelle fasi successive.
+Rimangono la verifica manuale finale delle coste e il collaudo del multiplayer con un progetto Firebase reale.
 
 ## Configurazione Firebase
 
