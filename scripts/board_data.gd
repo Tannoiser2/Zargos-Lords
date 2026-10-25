@@ -33,6 +33,55 @@ func _init() -> void:
 	]
 	for hex in void_hexes:
 		terrain[hex] = ZargosRules.Terrain.VOID
+	var forest_hexes: Array[Vector2i] = [
+		# Continente nord-occidentale
+		Vector2i(1, 17), Vector2i(3, 20), Vector2i(4, 20), Vector2i(8, 21),
+		Vector2i(11, 16), Vector2i(12, 16), Vector2i(15, 14), Vector2i(16, 14),
+		# Continente nord-orientale
+		Vector2i(31, 22), Vector2i(32, 22), Vector2i(26, 20), Vector2i(24, 17),
+		Vector2i(21, 15), Vector2i(33, 13), Vector2i(35, 16),
+		# Continente sud-orientale
+		Vector2i(20, 9), Vector2i(21, 9), Vector2i(22, 9), Vector2i(23, 8),
+		Vector2i(24, 8), Vector2i(23, 7), Vector2i(24, 7), Vector2i(25, 7),
+		Vector2i(28, 7), Vector2i(29, 7), Vector2i(29, 6), Vector2i(24, 4),
+		Vector2i(25, 4), Vector2i(26, 4), Vector2i(27, 3), Vector2i(28, 3),
+	]
+	for hex in forest_hexes:
+		terrain[hex] = ZargosRules.Terrain.FOREST
+	var mountain_hexes: Array[Vector2i] = [
+		# Catena nord-occidentale
+		Vector2i(10, 21), Vector2i(11, 21), Vector2i(8, 20), Vector2i(9, 20),
+		Vector2i(8, 19), Vector2i(9, 19), Vector2i(6, 18), Vector2i(7, 18),
+		Vector2i(5, 17), Vector2i(7, 17), Vector2i(3, 16), Vector2i(4, 16),
+		Vector2i(1, 15), Vector2i(0, 15),
+		# Catene nord-orientali
+		Vector2i(25, 22), Vector2i(25, 21), Vector2i(24, 20), Vector2i(23, 19),
+		Vector2i(23, 18), Vector2i(22, 17), Vector2i(22, 16), Vector2i(29, 17),
+		Vector2i(29, 16), Vector2i(29, 15), Vector2i(35, 15), Vector2i(35, 14), Vector2i(34, 13),
+		# Catene sud-occidentali
+		Vector2i(3, 7), Vector2i(3, 6), Vector2i(4, 6), Vector2i(3, 5),
+		Vector2i(4, 5), Vector2i(5, 5), Vector2i(5, 4), Vector2i(6, 4),
+		Vector2i(9, 6), Vector2i(10, 6), Vector2i(10, 5), Vector2i(10, 4),
+		Vector2i(11, 4), Vector2i(10, 3), Vector2i(11, 3), Vector2i(11, 2),
+		Vector2i(12, 2), Vector2i(11, 1), Vector2i(11, 8), Vector2i(12, 7),
+		Vector2i(13, 7), Vector2i(14, 7),
+		# Catene sud-orientali
+		Vector2i(22, 7), Vector2i(22, 6), Vector2i(22, 5), Vector2i(22, 4),
+		Vector2i(22, 3), Vector2i(23, 3), Vector2i(23, 2), Vector2i(24, 2),
+		Vector2i(25, 2), Vector2i(30, 8), Vector2i(31, 8), Vector2i(31, 7),
+		Vector2i(30, 6), Vector2i(31, 6), Vector2i(30, 5), Vector2i(31, 5),
+		Vector2i(30, 4), Vector2i(31, 4), Vector2i(33, 9), Vector2i(34, 9),
+	]
+	for hex in mountain_hexes:
+		terrain[hex] = ZargosRules.Terrain.MOUNTAIN
+	var vortex_hexes: Array[Vector2i] = [
+		Vector2i(8, 18), Vector2i(7, 15), Vector2i(1, 14),
+		Vector2i(32, 23), Vector2i(31, 21), Vector2i(24, 16), Vector2i(20, 15), Vector2i(35, 17), Vector2i(33, 13),
+		Vector2i(6, 10), Vector2i(0, 7), Vector2i(15, 6), Vector2i(6, 1),
+		Vector2i(31, 9), Vector2i(19, 8), Vector2i(29, 1), Vector2i(32, 1),
+	]
+	for hex in vortex_hexes:
+		terrain[hex] = ZargosRules.Terrain.MAGIC_VORTEX
 
 func terrain_at(hex: Vector2i) -> ZargosRules.Terrain:
 	return terrain.get(hex, ZargosRules.Terrain.PLAIN) as ZargosRules.Terrain
