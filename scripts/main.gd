@@ -4,6 +4,7 @@ const BOARD_SIZE := Vector2(16.0, 10.738)
 const HEX_RADIUS := 0.42
 
 var state := ZargosGameState.new()
+var board_data := ZargosBoardData.new()
 var camera: Camera3D
 var camera_rig: Node3D
 var camera_pitch: Node3D
@@ -313,9 +314,10 @@ func _try_move_selected(destination: Vector2i) -> void:
 	if selected.moved:
 		_show_event("Questa pedina ha già mosso nel turno corrente.")
 		return
-	var distance := ZargosRules.hex_distance(selected.hex, destination)
-	if distance > selected.movement:
-		_show_event("Destinazione troppo lontana: %d esagoni, movimento massimo %d." % [distance, selected.movement])
+	var flying := selected.ability == "Volo"
+	var movement_cost := board_data.find_movement_cost(selected.hex, destination, selected.movement, flying, func(hex: Vector2i): return _unit_at(hex) != null)
+	if movement_cost < 0:
+		_show_event("Destinazione non raggiungibile con il movimento e il terreno disponibili.")
 		return
 	if _unit_at(destination):
 		_show_event("L'esagono è già occupato.")
@@ -323,7 +325,8 @@ func _try_move_selected(destination: Vector2i) -> void:
 	selected.hex = destination
 	selected.position = hex_to_world(destination) + Vector3(0, 0.18, 0)
 	selected.moved = true
-	_show_event("%s spostato di %d esagoni." % [selected.unit_type, distance])
+	var terrain_name: String = String(ZargosRules.Terrain.keys()[board_data.terrain_at(destination)]).capitalize()
+	_show_event("%s spostato • costo %d/%d • terreno %s." % [selected.unit_type, movement_cost, selected.movement, terrain_name])
 
 func _unit_at(hex: Vector2i) -> CardboardUnit:
 	for child in get_children():
@@ -470,7 +473,8 @@ func _resolve_attack(attacker: CardboardUnit, defender: CardboardUnit) -> void:
 		return
 	attacker.acted = true
 	var die := rng.randi_range(1, 6)
-	var result := ZargosRules.resolve_combat(attacker.combat, defender.combat, die)
+	var defender_strength := defender.combat + board_data.defense_bonus_at(defender.hex)
+	var result := ZargosRules.resolve_combat(attacker.combat, defender_strength, die)
 	_show_event("Dado %d • %s contro %s: %s [%s]" % [die, attacker.unit_type, defender.unit_type, result.text, result.result])
 	match result.result:
 		"DE": _eliminate_unit(defender)

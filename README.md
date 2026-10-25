@@ -29,6 +29,8 @@ Il repository contiene per ora il materiale di riferimento del gioco base:
 - città tridimensionali, conquista e conteggio per fazione;
 - guarnigioni nascoste fino a quattro unità e uscita dalla città;
 - assedio con forza combinata della guarnigione e risultati speciali per le città;
+- percorso esagonale con costi di boschi, montagne, mari, ponti e gorghi;
+- bonus difensivi del terreno applicati al combattimento;
 - determinazione del vincitore in base alle città controllate al 25º mese;
 - test automatici delle regole e degli esempi del manuale.
 
