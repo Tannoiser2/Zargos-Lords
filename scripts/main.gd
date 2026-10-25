@@ -477,11 +477,12 @@ func _resolve_siege(attacker: CardboardUnit, city: CardboardCity) -> void:
 	attacker.acted = true
 	var defense := city.garrison_strength()
 	var die := rng.randi_range(1, 6)
-	var result := ZargosRules.resolve_combat(attacker.combat, defense, die)
+	var attack_strength := _effective_combat(attacker)
+	var result := ZargosRules.resolve_combat(attack_strength, defense, die)
 	var code: String = result.result
 	if code in ["D1", "D3"]:
 		code = "A1"
-	_show_event("Assedio • dado %d • %d contro guarnigione %d: %s" % [die, attacker.combat, defense, code])
+	_show_event("Assedio • dado %d • %d contro guarnigione %d: %s" % [die, attack_strength, defense, code])
 	if code in ["D5", "DE"]:
 		for defeated in city.clear_garrison():
 			_eliminate_unit(defeated)
@@ -538,9 +539,10 @@ func _resolve_attack(attacker: CardboardUnit, defender: CardboardUnit) -> void:
 		return
 	attacker.acted = true
 	var die := rng.randi_range(1, 6)
-	var defender_strength := defender.combat + board_data.defense_bonus_at(defender.hex)
-	var result := ZargosRules.resolve_combat(attacker.combat, defender_strength, die)
-	_show_event("Dado %d • %s contro %s: %s [%s]" % [die, attacker.unit_type, defender.unit_type, result.text, result.result])
+	var attacker_strength := _effective_combat(attacker)
+	var defender_strength := _effective_combat(defender) + board_data.defense_bonus_at(defender.hex)
+	var result := ZargosRules.resolve_combat(attacker_strength, defender_strength, die)
+	_show_event("Dado %d • %s %d contro %s %d: %s [%s]" % [die, attacker.unit_type, attacker_strength, defender.unit_type, defender_strength, result.text, result.result])
 	match result.result:
 		"DE": _eliminate_unit(defender)
 		"AE": _eliminate_unit(attacker)
@@ -565,7 +567,8 @@ func _resolve_ranged_attack(attacker: CardboardUnit, defender: CardboardUnit, di
 				_show_event("Bersaglio oltre la gittata massima delle fiamme.")
 				attacker.acted = false
 				return
-			_apply_ranged_hits(defender, die, ZargosRules.fire_hits(die, distance), "Fiamme")
+			var in_forest := board_data.terrain_at(defender.hex) == ZargosRules.Terrain.FOREST
+			_apply_ranged_hits(defender, die, ZargosRules.fire_hits(die, distance, in_forest), "Fiamme")
 		"Visione":
 			if distance > 5:
 				_show_event("Bersaglio oltre la gittata massima della visione.")
@@ -583,6 +586,16 @@ func _apply_ranged_hits(defender: CardboardUnit, die: int, hits: int, attack_nam
 	if defender.ranged_hits >= required:
 		_show_event(event_label.text + " • bersaglio eliminato")
 		_eliminate_unit(defender)
+
+func _effective_combat(unit: CardboardUnit) -> int:
+	var strength := unit.combat
+	if unit.faction != &"Cavalieri":
+		return strength
+	for neighbor in _hex_neighbors(unit.hex):
+		var supporter := _unit_at(neighbor)
+		if supporter and supporter.faction == unit.faction and supporter.unit_type == &"Mago":
+			strength += 2
+	return strength
 
 func _retreat_unit(unit: CardboardUnit, threat: CardboardUnit, distance: int) -> void:
 	var current := unit.hex
