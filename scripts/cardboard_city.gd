@@ -24,8 +24,8 @@ func setup(p_faction: StringName, p_hex: Vector2i) -> void:
 func _build_mesh() -> void:
 	var mesh_instance := MeshInstance3D.new()
 	var cylinder := CylinderMesh.new()
-	cylinder.top_radius = 0.18
-	cylinder.bottom_radius = 0.18
+	cylinder.top_radius = 0.23
+	cylinder.bottom_radius = 0.23
 	cylinder.height = 0.065
 	cylinder.radial_segments = 6
 	material = StandardMaterial3D.new()
@@ -37,14 +37,14 @@ func _build_mesh() -> void:
 
 	var collision := CollisionShape3D.new()
 	var shape := CylinderShape3D.new()
-	shape.radius = 0.18
+	shape.radius = 0.23
 	shape.height = 0.075
 	collision.shape = shape
 	add_child(collision)
 
 	var face := MeshInstance3D.new()
 	var face_mesh := PlaneMesh.new()
-	face_mesh.size = Vector2(0.35, 0.35)
+	face_mesh.size = Vector2(0.45, 0.45)
 	face_material = StandardMaterial3D.new()
 	face_material.albedo_texture = CITY_TEXTURES[faction]
 	face_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED

@@ -1,7 +1,7 @@
 extends Node3D
 
 const BOARD_SIZE := Vector2(16.0, 10.889)
-const HEX_RADIUS := 0.174
+const HEX_RADIUS := 0.245
 
 var state := ZargosGameState.new()
 var board_data := ZargosBoardData.new()
@@ -102,8 +102,8 @@ func _build_hex_overlay() -> void:
 		for row in range(ZargosRules.BOARD_ROWS):
 			var center := hex_to_world(Vector2i(column, row)) + Vector3(0, 0.125, 0)
 			for side in range(6):
-				var a := deg_to_rad(60.0 * side + 30.0)
-				var b := deg_to_rad(60.0 * (side + 1) + 30.0)
+				var a := deg_to_rad(60.0 * side)
+				var b := deg_to_rad(60.0 * (side + 1))
 				mesh.surface_add_vertex(center + Vector3(cos(a) * HEX_RADIUS, 0, sin(a) * HEX_RADIUS))
 				mesh.surface_add_vertex(center + Vector3(cos(b) * HEX_RADIUS, 0, sin(b) * HEX_RADIUS))
 	mesh.surface_end()
@@ -139,8 +139,8 @@ func _show_reachable_hexes(unit: CardboardUnit) -> void:
 			continue
 		var center := hex_to_world(hex) + Vector3(0, 0.132, 0)
 		for side in range(6):
-			var a := deg_to_rad(60.0 * side + 30.0)
-			var b := deg_to_rad(60.0 * (side + 1) + 30.0)
+			var a := deg_to_rad(60.0 * side)
+			var b := deg_to_rad(60.0 * (side + 1))
 			mesh.surface_add_vertex(center)
 			mesh.surface_add_vertex(center + Vector3(cos(a) * HEX_RADIUS * 0.88, 0, sin(a) * HEX_RADIUS * 0.88))
 			mesh.surface_add_vertex(center + Vector3(cos(b) * HEX_RADIUS * 0.88, 0, sin(b) * HEX_RADIUS * 0.88))
@@ -340,8 +340,8 @@ func _territory_owners(active: Array[StringName]) -> Dictionary:
 
 func _spawn_armies(territory_owners: Dictionary) -> void:
 	var homes := {
-		&"Cavalieri": Vector2i(13, 10), &"Draghi": Vector2i(39, 10),
-		&"Alati": Vector2i(13, 29), &"Monaci": Vector2i(39, 29)
+		&"Cavalieri": Vector2i(9, 6), &"Draghi": Vector2i(27, 6),
+		&"Alati": Vector2i(9, 17), &"Monaci": Vector2i(27, 17)
 	}
 	for territory: StringName in territory_owners:
 		var faction: StringName = territory_owners[territory]
@@ -354,10 +354,10 @@ func _spawn_armies(territory_owners: Dictionary) -> void:
 
 func _spawn_cities(territory_owners: Dictionary) -> void:
 	var locations := {
-		&"Cavalieri": [Vector2i(8, 6), Vector2i(13, 6), Vector2i(18, 7), Vector2i(9, 12), Vector2i(14, 15), Vector2i(19, 12)],
-		&"Draghi": [Vector2i(33, 6), Vector2i(39, 6), Vector2i(45, 7), Vector2i(34, 12), Vector2i(39, 15), Vector2i(45, 12)],
-		&"Alati": [Vector2i(7, 27), Vector2i(12, 33), Vector2i(18, 34), Vector2i(8, 35), Vector2i(14, 26), Vector2i(20, 29)],
-		&"Monaci": [Vector2i(32, 34), Vector2i(38, 34), Vector2i(45, 32), Vector2i(33, 27), Vector2i(39, 24), Vector2i(45, 27)],
+		&"Cavalieri": [Vector2i(6, 4), Vector2i(9, 4), Vector2i(12, 5), Vector2i(6, 8), Vector2i(10, 9), Vector2i(13, 8)],
+		&"Draghi": [Vector2i(23, 4), Vector2i(27, 4), Vector2i(31, 5), Vector2i(23, 8), Vector2i(27, 9), Vector2i(31, 8)],
+		&"Alati": [Vector2i(5, 16), Vector2i(8, 20), Vector2i(12, 21), Vector2i(6, 21), Vector2i(10, 16), Vector2i(14, 18)],
+		&"Monaci": [Vector2i(22, 21), Vector2i(26, 21), Vector2i(31, 20), Vector2i(23, 16), Vector2i(27, 15), Vector2i(31, 17)],
 	}
 	for territory: StringName in territory_owners:
 		var faction: StringName = territory_owners[territory]
@@ -375,18 +375,18 @@ func _spawn_unit(faction: StringName, unit_type: StringName, hex: Vector2i) -> v
 	unit.position = hex_to_world(hex) + Vector3(0, 0.18, 0)
 
 func hex_to_world(hex: Vector2i) -> Vector3:
-	var width := HEX_RADIUS * sqrt(3.0)
-	var x := (hex.x - (ZargosRules.BOARD_COLUMNS - 1) * 0.5) * width
-	var z := (hex.y - (ZargosRules.BOARD_ROWS - 1) * 0.5) * HEX_RADIUS * 1.5
+	var row_height := HEX_RADIUS * sqrt(3.0)
+	var x := (hex.x - (ZargosRules.BOARD_COLUMNS - 1) * 0.5) * HEX_RADIUS * 1.5
+	var z := (hex.y - (ZargosRules.BOARD_ROWS - 1) * 0.5) * row_height
 	if hex.x & 1:
-		z += HEX_RADIUS * 0.75
+		z += row_height * 0.5
 	return Vector3(x, 0.0, z)
 
 func world_to_hex(point: Vector3) -> Vector2i:
-	var width := HEX_RADIUS * sqrt(3.0)
-	var column := int(round(point.x / width + (ZargosRules.BOARD_COLUMNS - 1) * 0.5))
-	var z_offset := HEX_RADIUS * 0.75 if column & 1 else 0.0
-	var row := int(round((point.z - z_offset) / (HEX_RADIUS * 1.5) + (ZargosRules.BOARD_ROWS - 1) * 0.5))
+	var row_height := HEX_RADIUS * sqrt(3.0)
+	var column := int(round(point.x / (HEX_RADIUS * 1.5) + (ZargosRules.BOARD_COLUMNS - 1) * 0.5))
+	var z_offset := row_height * 0.5 if column & 1 else 0.0
+	var row := int(round((point.z - z_offset) / row_height + (ZargosRules.BOARD_ROWS - 1) * 0.5))
 	return Vector2i(clampi(column, 0, ZargosRules.BOARD_COLUMNS - 1), clampi(row, 0, ZargosRules.BOARD_ROWS - 1))
 
 func _unhandled_input(event: InputEvent) -> void:
