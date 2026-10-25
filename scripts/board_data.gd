@@ -2,6 +2,7 @@ class_name ZargosBoardData
 extends RefCounted
 
 var terrain: Dictionary = {}
+var distance_cache: Dictionary = {}
 
 func _init() -> void:
 	# Maschera ricavata sui centri del reticolo stampato della scansione originale.
@@ -115,6 +116,7 @@ func defense_bonus_at(hex: Vector2i) -> int:
 
 func set_terrain(hex: Vector2i, terrain_type: ZargosRules.Terrain) -> void:
 	terrain[hex] = terrain_type
+	distance_cache.clear()
 
 func find_movement_cost(start: Vector2i, goal: Vector2i, movement: int, flying: bool, occupied: Callable, stops_movement: Callable = Callable()) -> int:
 	return reachable_hexes(start, movement, flying, occupied, stops_movement).get(goal, -1) as int
@@ -124,9 +126,7 @@ func reachable_hexes(start: Vector2i, movement: int, flying: bool, occupied: Cal
 	var costs := {start: 0}
 	while not frontier.is_empty():
 		var current: Vector2i = frontier.pop_front()
-		for neighbor in neighbors(current):
-			if not is_on_board(neighbor):
-				continue
+		for neighbor in planetary_neighbors(current):
 			if neighbor != start and occupied.call(neighbor):
 				continue
 			var terrain_type := terrain_at(neighbor)
@@ -145,6 +145,57 @@ func reachable_hexes(start: Vector2i, movement: int, flying: bool, occupied: Cal
 				if terrain_type != ZargosRules.Terrain.MAGIC_VORTEX and not must_stop:
 					frontier.append(neighbor)
 	return costs
+
+func planetary_neighbors(hex: Vector2i) -> Array[Vector2i]:
+	var output: Array[Vector2i] = []
+	for candidate in neighbors(hex):
+		if is_on_board(candidate) and terrain_at(candidate) != ZargosRules.Terrain.VOID:
+			if candidate not in output:
+				output.append(candidate)
+			continue
+		var linked := _linked_border_hex(hex, candidate)
+		if linked != hex and is_on_board(linked) and terrain_at(linked) != ZargosRules.Terrain.VOID and linked not in output:
+			output.append(linked)
+	return output
+
+func planetary_distance(start: Vector2i, goal: Vector2i) -> int:
+	if start == goal:
+		return 0
+	var cache_key := Vector4i(start.x, start.y, goal.x, goal.y)
+	if distance_cache.has(cache_key):
+		return distance_cache[cache_key] as int
+	var frontier: Array[Vector2i] = [start]
+	var distances := {start: 0}
+	while not frontier.is_empty():
+		var current: Vector2i = frontier.pop_front()
+		for neighbor in planetary_neighbors(current):
+			if distances.has(neighbor):
+				continue
+			var distance: int = distances[current] + 1
+			if neighbor == goal:
+				distance_cache[cache_key] = distance
+				distance_cache[Vector4i(goal.x, goal.y, start.x, start.y)] = distance
+				return distance
+			distances[neighbor] = distance
+			frontier.append(neighbor)
+	distance_cache[cache_key] = 999
+	return 999
+
+func _linked_border_hex(origin: Vector2i, attempted: Vector2i) -> Vector2i:
+	# I bordi esterni sinistro e destro si ricongiungono alla stessa altezza.
+	if attempted.x < 0:
+		return Vector2i(ZargosRules.BOARD_COLUMNS - 1, clampi(attempted.y, 0, ZargosRules.BOARD_ROWS - 1))
+	if attempted.x >= ZargosRules.BOARD_COLUMNS:
+		return Vector2i(0, clampi(attempted.y, 0, ZargosRules.BOARD_ROWS - 1))
+	# I due lembi superiori e inferiori sono speculari, come nella figura 1.
+	if attempted.y < 0:
+		return Vector2i(clampi(ZargosRules.BOARD_COLUMNS - 1 - attempted.x, 0, ZargosRules.BOARD_COLUMNS - 1), 0)
+	if attempted.y >= ZargosRules.BOARD_ROWS:
+		return Vector2i(clampi(ZargosRules.BOARD_COLUMNS - 1 - attempted.x, 0, ZargosRules.BOARD_COLUMNS - 1), ZargosRules.BOARD_ROWS - 1)
+	# Lo stesso principio unisce i due tagli centrali marroni della scansione.
+	if terrain_at(attempted) == ZargosRules.Terrain.VOID and attempted.x >= 13 and attempted.x <= 22:
+		return Vector2i(ZargosRules.BOARD_COLUMNS - 1 - attempted.x, attempted.y)
+	return origin
 
 static func neighbors(hex: Vector2i) -> Array[Vector2i]:
 	var offsets_even: Array[Vector2i] = [Vector2i(1, -1), Vector2i(1, 0), Vector2i(0, 1), Vector2i(-1, 0), Vector2i(-1, -1), Vector2i(0, -1)]

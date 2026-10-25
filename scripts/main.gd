@@ -646,7 +646,7 @@ func _on_detach_escort() -> void:
 		_show_event("La scorta è stata formata in questa mossa e non può essere già separata.")
 		return
 	var protected := guard.guard_target
-	var destinations := _hex_neighbors(guard.hex).filter(func(hex: Vector2i): return _is_on_board(hex) and not _unit_at(hex) and ZargosRules.terrain_cost(board_data.terrain_at(hex)) >= 0)
+	var destinations := _map_neighbors(guard.hex).filter(func(hex: Vector2i): return not _unit_at(hex) and ZargosRules.terrain_cost(board_data.terrain_at(hex)) >= 0)
 	if destinations.is_empty():
 		_show_event("Non c'è un esagono libero in cui separare la scorta.")
 		return
@@ -703,9 +703,7 @@ func _vanish_destinations(unit: CardboardUnit) -> Dictionary:
 	var costs := {unit.vanish_origin: 0}
 	while not frontier.is_empty():
 		var current: Vector2i = frontier.pop_front()
-		for neighbor in ZargosBoardData.neighbors(current):
-			if not ZargosBoardData.is_on_board(neighbor):
-				continue
+		for neighbor in board_data.planetary_neighbors(current):
 			var terrain_type := board_data.terrain_at(neighbor)
 			if terrain_type in [ZargosRules.Terrain.SEA, ZargosRules.Terrain.VOID, ZargosRules.Terrain.MAGIC_VORTEX]:
 				continue
@@ -806,7 +804,7 @@ func _straight_path_is_clear(origin: Vector2i, destination: Vector2i, direction:
 	return true
 
 func _in_enemy_zone_of_influence(hex: Vector2i, moving_faction: StringName) -> bool:
-	for neighbor in _hex_neighbors(hex):
+	for neighbor in _map_neighbors(hex):
 		var unit := _unit_at(neighbor)
 		if unit and unit.faction != moving_faction:
 			return true
@@ -833,7 +831,7 @@ func _try_enter_city(city: CardboardCity) -> void:
 	if selected.faction != state.active_faction() or selected.moved:
 		_show_event("La pedina selezionata non può muovere ora.")
 		return
-	var distance := ZargosRules.hex_distance(selected.hex, city.hex)
+	var distance := _map_distance(selected.hex, city.hex)
 	if distance > selected.movement:
 		_show_event("La città è oltre il movimento massimo della pedina.")
 		return
@@ -867,7 +865,7 @@ func _release_garrison(city: CardboardCity) -> void:
 	if not unit:
 		_show_event("La città non contiene una guarnigione.")
 		return
-	var destinations := _hex_neighbors(city.hex).filter(func(hex: Vector2i): return _is_on_board(hex) and not _unit_at(hex))
+	var destinations := _map_neighbors(city.hex).filter(func(hex: Vector2i): return not _unit_at(hex))
 	if destinations.is_empty():
 		city.add_to_garrison(unit)
 		_show_event("Nessun esagono libero per far uscire la guarnigione.")
@@ -881,7 +879,7 @@ func _resolve_siege(attacker: CardboardUnit, city: CardboardCity) -> void:
 	if attacker.faction != state.active_faction() or attacker.acted:
 		_show_event("L'attaccante non può agire ora.")
 		return
-	if ZargosRules.hex_distance(attacker.hex, city.hex) != 1:
+	if _map_distance(attacker.hex, city.hex) != 1:
 		_show_event("Per assediare una città bisogna essere adiacenti.")
 		return
 	if city.garrison.is_empty():
@@ -920,7 +918,7 @@ func _resolve_group_siege(city: CardboardCity) -> void:
 		_show_event("La guarnigione contiene %d pedine: occorrono almeno altrettanti assedianti." % city.garrison.size())
 		return
 	for attacker in attackers:
-		if attacker.acted or ZargosRules.hex_distance(attacker.hex, city.hex) != 1:
+		if attacker.acted or _map_distance(attacker.hex, city.hex) != 1:
 			_show_event("Tutti gli assedianti devono essere disponibili e adiacenti alla città.")
 			return
 	if city.garrison.is_empty():
@@ -993,7 +991,7 @@ func _resolve_attack(attacker: CardboardUnit, defender: CardboardUnit) -> void:
 	if attacker.acted:
 		_show_event("Questa pedina ha già agito nella fase di combattimento.")
 		return
-	var distance := ZargosRules.hex_distance(attacker.hex, defender.hex)
+	var distance := _map_distance(attacker.hex, defender.hex)
 	if distance > 1 and attacker.ability in ["Tiro", "Fiamme", "Visione"]:
 		_resolve_ranged_attack(attacker, defender, distance)
 		return
@@ -1023,7 +1021,7 @@ func _resolve_group_attack(defender: CardboardUnit) -> void:
 	if combat_group.is_empty():
 		return
 	for attacker in combat_group:
-		if not is_instance_valid(attacker) or attacker.acted or ZargosRules.hex_distance(attacker.hex, defender.hex) != 1:
+		if not is_instance_valid(attacker) or attacker.acted or _map_distance(attacker.hex, defender.hex) != 1:
 			_show_event("Tutti gli attaccanti devono essere disponibili e adiacenti allo stesso difensore.")
 			return
 	var attackers := combat_group.duplicate()
@@ -1121,7 +1119,7 @@ func _effective_combat(unit: CardboardUnit) -> int:
 	var strength := unit.combat
 	if unit.faction != &"Cavalieri":
 		return strength
-	for neighbor in _hex_neighbors(unit.hex):
+	for neighbor in _map_neighbors(unit.hex):
 		var supporter := _unit_at(neighbor)
 		if supporter and supporter.faction == unit.faction and supporter.unit_type == &"Mago":
 			strength += 2
@@ -1136,7 +1134,7 @@ func _group_attack_strength(defender: CardboardUnit) -> int:
 func _charge_bonus(attacker: CardboardUnit, defender: CardboardUnit) -> int:
 	if not attacker.charge_ready or attacker.faction != &"Cavalieri" or attacker.unit_type != &"Signore":
 		return 0
-	if ZargosRules.hex_distance(attacker.hex, defender.hex) != 1:
+	if _map_distance(attacker.hex, defender.hex) != 1:
 		return 0
 	var impact_direction := _straight_direction(attacker.hex, defender.hex)
 	if impact_direction != attacker.charge_direction:
@@ -1147,10 +1145,10 @@ func _charge_bonus(attacker: CardboardUnit, defender: CardboardUnit) -> int:
 func _retreat_unit(unit: CardboardUnit, threat: CardboardUnit, distance: int) -> void:
 	var current := unit.hex
 	for step in range(distance):
-		var options := _hex_neighbors(current)
-		options = options.filter(func(hex: Vector2i): return _is_on_board(hex) and not _unit_at(hex))
-		options.sort_custom(func(a: Vector2i, b: Vector2i): return ZargosRules.hex_distance(a, threat.hex) > ZargosRules.hex_distance(b, threat.hex))
-		if options.is_empty() or ZargosRules.hex_distance(options[0], threat.hex) <= ZargosRules.hex_distance(current, threat.hex):
+		var options := _map_neighbors(current)
+		options = options.filter(func(hex: Vector2i): return not _unit_at(hex))
+		options.sort_custom(func(a: Vector2i, b: Vector2i): return _map_distance(a, threat.hex) > _map_distance(b, threat.hex))
+		if options.is_empty() or _map_distance(options[0], threat.hex) <= _map_distance(current, threat.hex):
 			_show_event(event_label.text + " • Fuga bloccata: pedina eliminata")
 			_eliminate_unit(unit, threat)
 			return
@@ -1183,12 +1181,18 @@ func _hex_neighbors(hex: Vector2i) -> Array[Vector2i]:
 		output.append(hex + offset)
 	return output
 
+func _map_neighbors(hex: Vector2i) -> Array[Vector2i]:
+	return board_data.planetary_neighbors(hex)
+
+func _map_distance(a: Vector2i, b: Vector2i) -> int:
+	return board_data.planetary_distance(a, b)
+
 func _is_on_board(hex: Vector2i) -> bool:
 	return hex.x >= 0 and hex.y >= 0 and hex.x < ZargosRules.BOARD_COLUMNS and hex.y < ZargosRules.BOARD_ROWS
 
 func _find_adjacent_enemy(unit: CardboardUnit) -> CardboardUnit:
 	for child in get_children():
-		if child is CardboardUnit and child.faction != unit.faction and ZargosRules.hex_distance(child.hex, unit.hex) == 1:
+		if child is CardboardUnit and child.faction != unit.faction and _map_distance(child.hex, unit.hex) == 1:
 			return child
 	return null
 
@@ -1296,7 +1300,7 @@ func _best_ai_destination(unit: CardboardUnit) -> Vector2i:
 				continue
 			var nearest := 9999
 			for target_hex in targets:
-				nearest = mini(nearest, ZargosRules.hex_distance(candidate, target_hex))
+				nearest = mini(nearest, _map_distance(candidate, target_hex))
 			if nearest < best_distance:
 				best_distance = nearest
 				best_hex = candidate
@@ -1309,7 +1313,7 @@ func _best_ai_target(unit: CardboardUnit) -> CardboardUnit:
 	var best: CardboardUnit = null
 	var best_distance := 9999
 	for enemy in _enemy_units(unit.faction):
-		var distance := ZargosRules.hex_distance(unit.hex, enemy.hex)
+		var distance := _map_distance(unit.hex, enemy.hex)
 		if unit.ability == "Tiro" and not _arrow_line_result(unit, enemy).clear:
 			continue
 		if distance <= max_range and distance < best_distance:
