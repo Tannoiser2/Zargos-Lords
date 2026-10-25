@@ -381,6 +381,7 @@ func _build_setup_screen() -> void:
 	firebase_key_input = LineEdit.new()
 	firebase_key_input.placeholder_text = "Firebase Web API key"
 	stack.add_child(firebase_key_input)
+	_load_firebase_defaults()
 	room_code_input = LineEdit.new()
 	room_code_input.placeholder_text = "Codice stanza (vuoto = generato automaticamente)"
 	room_code_input.max_length = 8
@@ -397,6 +398,17 @@ func _build_setup_screen() -> void:
 	join.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	join.pressed.connect(func(): _begin_online("join", player_count.get_selected_id(), faction_choice.selected))
 	online_buttons.add_child(join)
+
+func _load_firebase_defaults() -> void:
+	if not FileAccess.file_exists("res://firebase_config.json"):
+		return
+	var file := FileAccess.open("res://firebase_config.json", FileAccess.READ)
+	if not file:
+		return
+	var config: Variant = JSON.parse_string(file.get_as_text())
+	if config is Dictionary:
+		firebase_url_input.text = String(config.get("database_url", ""))
+		firebase_key_input.text = String(config.get("api_key", ""))
 
 func _start_new_game(player_count: int, human_index: int) -> void:
 	human_faction = ZargosRules.FACTIONS[human_index]

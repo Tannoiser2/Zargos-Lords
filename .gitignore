@@ -17,6 +17,7 @@ export.cfg
 .env
 .env.*
 firebase-debug.log
+firebase_config.json
 tmp/
 build/
 

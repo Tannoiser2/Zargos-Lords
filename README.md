@@ -65,6 +65,13 @@ Il client usa le API REST ufficiali e non richiede un SDK Godot. Nel progetto Fi
 
 La Web API key identifica il progetto ma non sostituisce le regole di sicurezza: ogni richiesta al database viene autenticata con un token anonimo. Nessuna configurazione di un progetto Firebase reale viene salvata nel repository.
 
+Per lo sviluppo locale si può copiare `firebase_config.example.json` in `firebase_config.json`; quest'ultimo è ignorato da Git. Per GitHub Pages vanno invece creati nei Secrets del repository:
+
+- `FIREBASE_DATABASE_URL`;
+- `FIREBASE_WEB_API_KEY`.
+
+La pipeline genera automaticamente il file di configurazione soltanto dentro la build pubblicata. Se i Secrets non sono presenti, URL e API key possono comunque essere inseriti manualmente nella lobby.
+
 ## Avvio
 
 Aprire `project.godot` con Godot 4.7 e avviare la scena principale.
