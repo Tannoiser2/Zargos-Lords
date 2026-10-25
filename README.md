@@ -18,10 +18,12 @@ Il repository contiene per ora il materiale di riferimento del gioco base:
 - pedine esagonali tridimensionali di tipo cartoncino;
 - quattro popoli con valori base di movimento e combattimento;
 - selezione e movimento su una griglia esagonale logica;
+- griglia logica sovrapposta e disattivabile per la calibrazione della mappa;
 - sequenza Alleanze, Movimento e Combattimento;
 - ordine di turno Cavalieri, Draghi, Alati e Monaci;
 - calendario di 25 mesi;
 - tabelle originali complete per combattimento, frecce, fiamme e visioni;
+- risoluzione di eliminazioni e arretramenti, inclusa la fuga bloccata;
 - test automatici delle regole e degli esempi del manuale.
 
 I terreni definitivi, gli schieramenti, gli avversari IA e il multiplayer Firebase verranno aggiunti nelle fasi successive.
@@ -36,6 +38,7 @@ Aprire `project.godot` con Godot 4.7 e avviare la scena principale.
 - tasto centrale e trascinamento: sposta la visuale;
 - rotella: ingrandisce o allontana;
 - tasto sinistro: seleziona una pedina o una destinazione;
+- in combattimento, selezionare l'attaccante e poi una pedina nemica adiacente;
 - Esc: annulla la selezione.
 
 ## Edizione di riferimento

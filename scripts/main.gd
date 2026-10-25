@@ -11,6 +11,7 @@ var selected: CardboardUnit
 var status_label: Label
 var details_label: Label
 var event_label: Label
+var grid_overlay: MeshInstance3D
 var rng := RandomNumberGenerator.new()
 var orbiting := false
 var panning := false
@@ -22,6 +23,7 @@ func _ready() -> void:
 	rng.randomize()
 	_build_environment()
 	_build_board()
+	_build_hex_overlay()
 	_build_camera()
 	_build_lights()
 	_build_ui()
@@ -75,6 +77,27 @@ func _build_board() -> void:
 	rim.mesh = rim_mesh
 	rim.position.y = -0.17
 	add_child(rim)
+
+func _build_hex_overlay() -> void:
+	grid_overlay = MeshInstance3D.new()
+	grid_overlay.name = "HexGridOverlay"
+	var mesh := ImmediateMesh.new()
+	var material := StandardMaterial3D.new()
+	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	material.albedo_color = Color(0.94, 0.72, 0.28, 0.42)
+	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mesh.surface_begin(Mesh.PRIMITIVE_LINES, material)
+	for column in range(ZargosRules.BOARD_COLUMNS):
+		for row in range(ZargosRules.BOARD_ROWS):
+			var center := hex_to_world(Vector2i(column, row)) + Vector3(0, 0.125, 0)
+			for side in range(6):
+				var a := deg_to_rad(60.0 * side + 30.0)
+				var b := deg_to_rad(60.0 * (side + 1) + 30.0)
+				mesh.surface_add_vertex(center + Vector3(cos(a) * HEX_RADIUS, 0, sin(a) * HEX_RADIUS))
+				mesh.surface_add_vertex(center + Vector3(cos(b) * HEX_RADIUS, 0, sin(b) * HEX_RADIUS))
+	mesh.surface_end()
+	grid_overlay.mesh = mesh
+	add_child(grid_overlay)
 
 func _build_camera() -> void:
 	camera_rig = Node3D.new()
@@ -149,6 +172,11 @@ func _build_ui() -> void:
 	reset_view.text = "Centra vista"
 	reset_view.pressed.connect(_reset_camera)
 	buttons.add_child(reset_view)
+	var grid_button := CheckButton.new()
+	grid_button.text = "Griglia"
+	grid_button.button_pressed = true
+	grid_button.toggled.connect(func(value: bool): grid_overlay.visible = value)
+	buttons.add_child(grid_button)
 
 	event_label = Label.new()
 	event_label.position = Vector2(20, 194)
@@ -235,7 +263,10 @@ func _pick_at(screen_position: Vector2) -> void:
 		return
 	var collider: Object = hit.collider
 	if collider is CardboardUnit:
-		_select_unit(collider)
+		if selected and collider != selected and state.phase == ZargosRules.Phase.COMBAT:
+			_resolve_attack(selected, collider)
+		else:
+			_select_unit(collider)
 	elif collider.has_meta("is_board") and selected:
 		_try_move_selected(world_to_hex(hit.position))
 
@@ -294,14 +325,62 @@ func _on_resolve_battle() -> void:
 	if not target:
 		_show_event("Nessun nemico adiacente alla pedina selezionata.")
 		return
+	_resolve_attack(selected, target)
+
+func _resolve_attack(attacker: CardboardUnit, defender: CardboardUnit) -> void:
+	if attacker.faction != state.active_faction():
+		_show_event("È il turno dei %s." % state.active_faction())
+		return
+	if attacker.faction == defender.faction:
+		_show_event("Non puoi attaccare una pedina del tuo popolo.")
+		return
+	if ZargosRules.hex_distance(attacker.hex, defender.hex) != 1:
+		_show_event("Il combattimento normale richiede un nemico adiacente.")
+		return
 	var die := rng.randi_range(1, 6)
-	var result := ZargosRules.resolve_combat(selected.combat, target.combat, die)
-	_show_event("Dado %d • %s contro %s: %s" % [die, selected.unit_type, target.unit_type, result.text])
-	if result.result == "DE":
-		target.queue_free()
-	elif result.result == "AE":
-		selected.queue_free()
+	var result := ZargosRules.resolve_combat(attacker.combat, defender.combat, die)
+	_show_event("Dado %d • %s contro %s: %s [%s]" % [die, attacker.unit_type, defender.unit_type, result.text, result.result])
+	match result.result:
+		"DE": _eliminate_unit(defender)
+		"AE": _eliminate_unit(attacker)
+		"IMPOSSIBILE": return
+		_:
+			var retreating := defender if result.retreat > 0 else attacker
+			var threat := attacker if result.retreat > 0 else defender
+			_retreat_unit(retreating, threat, absi(result.retreat))
+
+func _retreat_unit(unit: CardboardUnit, threat: CardboardUnit, distance: int) -> void:
+	var current := unit.hex
+	for step in range(distance):
+		var options := _hex_neighbors(current)
+		options = options.filter(func(hex: Vector2i): return _is_on_board(hex) and not _unit_at(hex))
+		options.sort_custom(func(a: Vector2i, b: Vector2i): return ZargosRules.hex_distance(a, threat.hex) > ZargosRules.hex_distance(b, threat.hex))
+		if options.is_empty() or ZargosRules.hex_distance(options[0], threat.hex) <= ZargosRules.hex_distance(current, threat.hex):
+			_show_event(event_label.text + " • Fuga bloccata: pedina eliminata")
+			_eliminate_unit(unit)
+			return
+		current = options[0]
+	unit.hex = current
+	var tween := create_tween()
+	tween.tween_property(unit, "position", hex_to_world(current) + Vector3(0, 0.18, 0), 0.28).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+
+func _eliminate_unit(unit: CardboardUnit) -> void:
+	if selected == unit:
 		selected = null
+	var tween := create_tween()
+	tween.tween_property(unit, "scale", Vector3.ZERO, 0.22).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_IN)
+	tween.tween_callback(unit.queue_free)
+
+func _hex_neighbors(hex: Vector2i) -> Array[Vector2i]:
+	var offsets_even: Array[Vector2i] = [Vector2i(1, -1), Vector2i(1, 0), Vector2i(0, 1), Vector2i(-1, 0), Vector2i(-1, -1), Vector2i(0, -1)]
+	var offsets_odd: Array[Vector2i] = [Vector2i(1, 0), Vector2i(1, 1), Vector2i(0, 1), Vector2i(-1, 1), Vector2i(-1, 0), Vector2i(0, -1)]
+	var output: Array[Vector2i] = []
+	for offset in (offsets_odd if hex.x & 1 else offsets_even):
+		output.append(hex + offset)
+	return output
+
+func _is_on_board(hex: Vector2i) -> bool:
+	return hex.x >= 0 and hex.y >= 0 and hex.x < ZargosRules.BOARD_COLUMNS and hex.y < ZargosRules.BOARD_ROWS
 
 func _find_adjacent_enemy(unit: CardboardUnit) -> CardboardUnit:
 	for child in get_children():
