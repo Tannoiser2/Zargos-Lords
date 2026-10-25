@@ -18,11 +18,15 @@ var ai_button: CheckButton
 var escort_button: Button
 var special_button: Button
 var deployment_button: Button
+var grid_button: CheckButton
 var grid_overlay: MeshInstance3D
 var movement_overlay: MeshInstance3D
 var rng := RandomNumberGenerator.new()
 var orbiting := false
 var panning := false
+var left_pressed := false
+var left_dragged := false
+var left_press_position := Vector2.ZERO
 var orbit_yaw := 0.0
 var orbit_pitch := -1.18
 var camera_distance := 15.2
@@ -137,7 +141,7 @@ func _build_hex_overlay() -> void:
 	var mesh := ImmediateMesh.new()
 	var material := StandardMaterial3D.new()
 	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	material.albedo_color = Color(0.94, 0.72, 0.28, 0.42)
+	material.albedo_color = Color(0.05, 0.86, 1.0, 0.78)
 	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	mesh.surface_begin(Mesh.PRIMITIVE_LINES, material)
 	for column in range(ZargosRules.BOARD_COLUMNS):
@@ -276,13 +280,6 @@ func _build_ui() -> void:
 	reset_view.text = "Centra vista"
 	reset_view.pressed.connect(_reset_camera)
 	buttons.add_child(reset_view)
-	var grid_button := CheckButton.new()
-	grid_button.text = "Reticolo"
-	grid_button.toggled.connect(func(enabled: bool):
-		grid_overlay.visible = enabled
-		_show_event("Reticolo di calibrazione %s." % ("visibile" if enabled else "nascosto"))
-	)
-	buttons.add_child(grid_button)
 	ai_button = CheckButton.new()
 	ai_button.text = "IA avversari"
 	ai_button.toggled.connect(_on_ai_toggled)
@@ -293,6 +290,16 @@ func _build_ui() -> void:
 	deployment_button.pressed.connect(_finish_deployment)
 	buttons.add_child(deployment_button)
 
+	grid_button = CheckButton.new()
+	grid_button.text = "RETICOLO ESAGONI  [G]"
+	grid_button.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+	grid_button.position = Vector2(-260, 22)
+	grid_button.custom_minimum_size = Vector2(235, 42)
+	grid_button.add_theme_font_size_override("font_size", 16)
+	grid_button.add_theme_color_override("font_color", Color("7deeff"))
+	grid_button.toggled.connect(_set_grid_visible)
+	layer.add_child(grid_button)
+
 	event_label = Label.new()
 	event_label.position = Vector2(20, 194)
 	event_label.size = Vector2(640, 32)
@@ -301,7 +308,7 @@ func _build_ui() -> void:
 	layer.add_child(event_label)
 
 	var help := Label.new()
-	help.text = "Rotazione: tasto destro  •  Spostamento: tasto centrale  •  Zoom: rotella  •  Selezione: sinistro"
+	help.text = "Trascina sinistro: sposta  •  Clic sinistro: seleziona  •  Destro: ruota  •  Rotella: zoom  •  G: reticolo"
 	help.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	help.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
 	help.offset_top = -42
@@ -843,26 +850,47 @@ func _unhandled_input(event: InputEvent) -> void:
 			orbiting = event.pressed
 		if event.button_index == MOUSE_BUTTON_MIDDLE:
 			panning = event.pressed
+		if event.button_index == MOUSE_BUTTON_LEFT:
+			if event.pressed:
+				left_pressed = true
+				left_dragged = false
+				left_press_position = event.position
+			else:
+				if left_pressed and not left_dragged:
+					_pick_at(event.position)
+				left_pressed = false
 		if event.button_index == MOUSE_BUTTON_WHEEL_UP and event.pressed:
 			camera_distance = maxf(4.0, camera_distance - 0.9)
 			_update_camera()
 		if event.button_index == MOUSE_BUTTON_WHEEL_DOWN and event.pressed:
 			camera_distance = minf(24.0, camera_distance + 0.9)
 			_update_camera()
-		if event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
-			_pick_at(event.position)
 	elif event is InputEventMouseMotion:
 		if orbiting:
 			orbit_yaw -= event.relative.x * 0.008
 			orbit_pitch = clampf(orbit_pitch - event.relative.y * 0.008, -1.45, -0.28)
 			_update_camera()
-		elif panning:
-			var factor := camera_distance * 0.0018
-			camera_rig.position += camera_rig.global_basis.x * -event.relative.x * factor
-			camera_rig.position += Vector3(camera_rig.global_basis.z.x, 0, camera_rig.global_basis.z.z).normalized() * -event.relative.y * factor
+		elif panning or left_pressed:
+			if left_pressed and event.position.distance_to(left_press_position) > 6.0:
+				left_dragged = true
+			_pan_camera(event.relative)
+	if event is InputEventKey and event.pressed and not event.echo and event.physical_keycode == KEY_G:
+		grid_button.button_pressed = not grid_button.button_pressed
 	if event.is_action_pressed("cancel_action"):
 		reappearing_unit = null
 		_select_unit(null)
+
+func _pan_camera(relative: Vector2) -> void:
+	var factor := camera_distance * 0.0018
+	camera_rig.position += camera_rig.global_basis.x * -relative.x * factor
+	var forward := Vector3(camera_rig.global_basis.z.x, 0, camera_rig.global_basis.z.z).normalized()
+	camera_rig.position += forward * -relative.y * factor
+	camera_rig.position.x = clampf(camera_rig.position.x, -7.0, 7.0)
+	camera_rig.position.z = clampf(camera_rig.position.z, -5.0, 5.0)
+
+func _set_grid_visible(enabled: bool) -> void:
+	grid_overlay.visible = enabled
+	_show_event("Reticolo motore %s: confronta le linee ciano con gli esagoni stampati." % ("attivo" if enabled else "disattivato"))
 
 func _pick_at(screen_position: Vector2) -> void:
 	var origin := camera.project_ray_origin(screen_position)

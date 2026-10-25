@@ -61,9 +61,9 @@ func setup(p_faction: StringName, p_type: StringName, p_hex: Vector2i) -> void:
 func _build_mesh() -> void:
 	var mesh_instance := MeshInstance3D.new()
 	var cylinder := CylinderMesh.new()
-	cylinder.top_radius = 0.22
-	cylinder.bottom_radius = 0.22
-	cylinder.height = 0.055
+	cylinder.top_radius = 0.17
+	cylinder.bottom_radius = 0.17
+	cylinder.height = 0.045
 	cylinder.radial_segments = 6
 	var material := StandardMaterial3D.new()
 	material.albedo_color = ZargosRules.FACTION_COLORS[faction]
@@ -74,14 +74,14 @@ func _build_mesh() -> void:
 
 	var collision := CollisionShape3D.new()
 	var shape := CylinderShape3D.new()
-	shape.radius = 0.22
-	shape.height = 0.065
+	shape.radius = 0.17
+	shape.height = 0.055
 	collision.shape = shape
 	add_child(collision)
 
 	var face := MeshInstance3D.new()
 	var face_mesh := PlaneMesh.new()
-	face_mesh.size = Vector2(0.43, 0.43)
+	face_mesh.size = Vector2(0.33, 0.33)
 	var face_material := StandardMaterial3D.new()
 	face_material.albedo_texture = COUNTER_TEXTURES[faction][unit_type]
 	face_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
@@ -89,11 +89,11 @@ func _build_mesh() -> void:
 	face_material.cull_mode = BaseMaterial3D.CULL_DISABLED
 	face_mesh.material = face_material
 	face.mesh = face_mesh
-	face.position.y = 0.029
+	face.position.y = 0.024
 	add_child(face)
 
 func set_selected(value: bool) -> void:
-	scale = Vector3.ONE * (1.18 if value else 1.0)
+	scale = Vector3.ONE * (1.25 if value else 1.0)
 
 func reset_turn() -> void:
 	moved = false

@@ -10,6 +10,11 @@ func _run() -> void:
 	await process_frame
 	game._start_new_game(2, 0)
 	await process_frame
+	game._set_grid_visible(true)
+	assert(game.grid_overlay.visible)
+	var old_camera_position: Vector3 = game.camera_rig.position
+	game._pan_camera(Vector2(40, 25))
+	assert(game.camera_rig.position != old_camera_position)
 	var snapshot: Dictionary = game._make_online_snapshot()
 	assert(snapshot.factions.size() == 2)
 	assert(snapshot.units.size() == 16)

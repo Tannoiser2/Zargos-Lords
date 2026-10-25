@@ -89,9 +89,10 @@ https://tannoiser2.github.io/Zargos-Lords/
 - tasto destro e trascinamento: ruota il tabellone;
 - tasto centrale e trascinamento: sposta la visuale;
 - rotella: ingrandisce o allontana;
-- tasto sinistro: seleziona una pedina o una destinazione;
+- clic sinistro: seleziona una pedina o una destinazione;
+- tasto sinistro e trascinamento: sposta liberamente il tabellone;
 - prima del mese 1, selezionare pedine o città e collocarle sui propri continenti, quindi premere Termina schieramento;
-- Reticolo: mostra o nasconde la griglia calibrata; facendo clic su un esagono libero vengono mostrate coordinate e terreno;
+- Reticolo esagoni o tasto G: mostra o nasconde in ciano la griglia del motore sopra gli esagoni originali; facendo clic su un esagono libero vengono mostrate coordinate e terreno;
 - in combattimento, selezionare l'attaccante e poi una pedina nemica adiacente;
 - Esc: annulla la selezione.
 
