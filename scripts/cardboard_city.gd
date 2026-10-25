@@ -24,9 +24,9 @@ func setup(p_faction: StringName, p_hex: Vector2i) -> void:
 func _build_mesh() -> void:
 	var mesh_instance := MeshInstance3D.new()
 	var cylinder := CylinderMesh.new()
-	cylinder.top_radius = 0.18
-	cylinder.bottom_radius = 0.18
-	cylinder.height = 0.05
+	cylinder.top_radius = 0.075
+	cylinder.bottom_radius = 0.075
+	cylinder.height = 0.03
 	cylinder.radial_segments = 6
 	material = StandardMaterial3D.new()
 	material.albedo_color = ZargosRules.FACTION_COLORS[faction].darkened(0.18)
@@ -37,14 +37,14 @@ func _build_mesh() -> void:
 
 	var collision := CollisionShape3D.new()
 	var shape := CylinderShape3D.new()
-	shape.radius = 0.18
-	shape.height = 0.06
+	shape.radius = 0.075
+	shape.height = 0.038
 	collision.shape = shape
 	add_child(collision)
 
 	var face := MeshInstance3D.new()
 	var face_mesh := PlaneMesh.new()
-	face_mesh.size = Vector2(0.35, 0.35)
+	face_mesh.size = Vector2(0.145, 0.145)
 	face_material = StandardMaterial3D.new()
 	face_material.albedo_texture = CITY_TEXTURES[faction]
 	face_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
@@ -52,7 +52,7 @@ func _build_mesh() -> void:
 	face_material.cull_mode = BaseMaterial3D.CULL_DISABLED
 	face_mesh.material = face_material
 	face.mesh = face_mesh
-	face.position.y = 0.027
+	face.position.y = 0.017
 	add_child(face)
 
 	label = Label3D.new()

@@ -13,7 +13,7 @@ Il repository contiene per ora il materiale di riferimento del gioco base:
 
 È disponibile un primo prototipo Godot 4.7 con:
 
-- tabellone tridimensionale con spessore e scansione della mappa originale;
+- tabellone tridimensionale con spessore e mappa ad alta risoluzione `Mappa 2.png` del modulo Tabletop Simulator;
 - camera orbitale con rotazione, ingrandimento e spostamento;
 - pedine esagonali tridimensionali di tipo cartoncino;
 - quattro popoli con valori base di movimento e combattimento;
@@ -44,7 +44,7 @@ Il repository contiene per ora il materiale di riferimento del gioco base:
 - guarnigioni nascoste fino a quattro unità e uscita dalla città;
 - assedio con più attaccanti, numero minimo richiesto, forza combinata della guarnigione e risultati speciali per le città;
 - percorso esagonale con costi di boschi, montagne, mari, ponti e gorghi;
-- reticolo 36 × 24 calibrato sui centri degli esagoni stampati della scansione originale;
+- reticolo TTS 80 × 61 con esagoni a punta in alto, passo e offset ricavati dal modulo `2401055803`;
 - maschera completa di mare, laghi e spazi centrali esterni non transitabili;
 - corridoi dei ponti di nuvole della fascia equatoriale distinti dal mare aperto;
 - cuciture planetarie dei bordi alfabetici, con passaggio verso i due esagoni corrispondenti;
@@ -59,7 +59,7 @@ Il repository contiene per ora il materiale di riferimento del gioco base:
 - sincronizzazione online di turno, schieramento, pedine, scorte, città e guarnigioni;
 - test automatici delle regole e degli esempi del manuale.
 
-Rimangono la verifica manuale finale delle coste e il collaudo del multiplayer con un progetto Firebase reale.
+Rimangono la riclassificazione definitiva dei terreni sulla nuova griglia TTS, la verifica manuale delle coste e il collaudo del multiplayer con un progetto Firebase reale. Il modulo TTS fornisce geometria e posizioni degli scenari, ma non una mappa logica dei terreni.
 
 ## Configurazione Firebase
 

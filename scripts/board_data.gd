@@ -26,7 +26,7 @@ func _init() -> void:
 		Vector2i(35, 2), Vector2i(35, 11), Vector2i(35, 12), Vector2i(35, 16), Vector2i(35, 17), Vector2i(35, 22),
 	]
 	for hex in sea_hexes:
-		terrain[hex] = ZargosRules.Terrain.SEA
+		terrain[_legacy_coordinate(hex)] = ZargosRules.Terrain.SEA
 	var void_hexes: Array[Vector2i] = [
 		Vector2i(14, 0), Vector2i(14, 23), Vector2i(15, 0), Vector2i(15, 1), Vector2i(15, 21), Vector2i(15, 22), Vector2i(15, 23), Vector2i(16, 0),
 		Vector2i(16, 1), Vector2i(16, 2), Vector2i(16, 3), Vector2i(16, 20), Vector2i(16, 21), Vector2i(16, 22), Vector2i(16, 23), Vector2i(17, 0),
@@ -37,7 +37,7 @@ func _init() -> void:
 		Vector2i(20, 1), Vector2i(20, 2), Vector2i(20, 21), Vector2i(20, 22), Vector2i(20, 23), Vector2i(21, 0), Vector2i(21, 22), Vector2i(21, 23),
 	]
 	for hex in void_hexes:
-		terrain[hex] = ZargosRules.Terrain.VOID
+		terrain[_legacy_coordinate(hex)] = ZargosRules.Terrain.VOID
 	# Corridoi di nuvole verificati sulla fascia equatoriale della scansione.
 	# Sono distinti dal mare: anche le unità volanti possono attraversarli, ma
 	# soltanto seguendo il ponte da una costa all'altra.
@@ -52,7 +52,7 @@ func _init() -> void:
 		Vector2i(35, 11), Vector2i(35, 12),
 	]
 	for hex in cloud_bridge_hexes:
-		terrain[hex] = ZargosRules.Terrain.CLOUD_BRIDGE
+		terrain[_legacy_coordinate(hex)] = ZargosRules.Terrain.CLOUD_BRIDGE
 	var forest_hexes: Array[Vector2i] = [
 		# Continente nord-occidentale
 		Vector2i(1, 17), Vector2i(3, 20), Vector2i(4, 20), Vector2i(8, 21),
@@ -67,7 +67,7 @@ func _init() -> void:
 		Vector2i(25, 4), Vector2i(26, 4), Vector2i(27, 3), Vector2i(28, 3),
 	]
 	for hex in forest_hexes:
-		terrain[_scan_coordinate(hex)] = ZargosRules.Terrain.FOREST
+		terrain[_legacy_coordinate(_scan_coordinate(hex))] = ZargosRules.Terrain.FOREST
 	var mountain_hexes: Array[Vector2i] = [
 		# Catena nord-occidentale
 		Vector2i(10, 21), Vector2i(11, 21), Vector2i(8, 20), Vector2i(9, 20),
@@ -93,7 +93,7 @@ func _init() -> void:
 		Vector2i(30, 4), Vector2i(31, 4), Vector2i(33, 9), Vector2i(34, 9),
 	]
 	for hex in mountain_hexes:
-		terrain[_scan_coordinate(hex)] = ZargosRules.Terrain.MOUNTAIN
+		terrain[_legacy_coordinate(_scan_coordinate(hex))] = ZargosRules.Terrain.MOUNTAIN
 	var vortex_hexes: Array[Vector2i] = [
 		Vector2i(8, 18), Vector2i(7, 15), Vector2i(1, 14),
 		Vector2i(32, 23), Vector2i(31, 21), Vector2i(24, 16), Vector2i(20, 15), Vector2i(35, 17), Vector2i(33, 13),
@@ -101,12 +101,20 @@ func _init() -> void:
 		Vector2i(31, 9), Vector2i(19, 8), Vector2i(29, 1), Vector2i(32, 1),
 	]
 	for hex in vortex_hexes:
-		terrain[_scan_coordinate(hex)] = ZargosRules.Terrain.MAGIC_VORTEX
+		terrain[_legacy_coordinate(_scan_coordinate(hex))] = ZargosRules.Terrain.MAGIC_VORTEX
+
+func _legacy_coordinate(old_hex: Vector2i) -> Vector2i:
+	# Migrazione provvisoria delle annotazioni della scansione 36x24 sulla
+	# griglia 80x61 ricavata dal modulo Tabletop Simulator.
+	return Vector2i(
+		roundi(float(old_hex.x) * float(ZargosRules.BOARD_COLUMNS - 1) / 35.0),
+		roundi(float(old_hex.y) * float(ZargosRules.BOARD_ROWS - 1) / 23.0)
+	)
 
 func _scan_coordinate(old_hex: Vector2i) -> Vector2i:
 	# Le prime annotazioni erano state lette dal basso verso l'alto, mentre la
 	# texture e le coordinate di gioco partono dal bordo superiore della mappa.
-	return Vector2i(old_hex.x, ZargosRules.BOARD_ROWS - 1 - old_hex.y)
+	return Vector2i(old_hex.x, 23 - old_hex.y)
 
 func terrain_at(hex: Vector2i) -> ZargosRules.Terrain:
 	return terrain.get(hex, ZargosRules.Terrain.PLAIN) as ZargosRules.Terrain
@@ -207,15 +215,15 @@ func _linked_border_hex(origin: Vector2i, attempted: Vector2i) -> Vector2i:
 	if attempted.y >= ZargosRules.BOARD_ROWS:
 		return Vector2i(clampi(ZargosRules.BOARD_COLUMNS - 1 - attempted.x, 0, ZargosRules.BOARD_COLUMNS - 1), ZargosRules.BOARD_ROWS - 1)
 	# Lo stesso principio unisce i due tagli centrali marroni della scansione.
-	if terrain_at(attempted) == ZargosRules.Terrain.VOID and attempted.x >= 13 and attempted.x <= 22:
+	if terrain_at(attempted) == ZargosRules.Terrain.VOID and attempted.x >= 29 and attempted.x <= 50:
 		return Vector2i(ZargosRules.BOARD_COLUMNS - 1 - attempted.x, attempted.y)
 	return origin
 
 static func neighbors(hex: Vector2i) -> Array[Vector2i]:
-	var offsets_even: Array[Vector2i] = [Vector2i(1, -1), Vector2i(1, 0), Vector2i(0, 1), Vector2i(-1, 0), Vector2i(-1, -1), Vector2i(0, -1)]
-	var offsets_odd: Array[Vector2i] = [Vector2i(1, 0), Vector2i(1, 1), Vector2i(0, 1), Vector2i(-1, 1), Vector2i(-1, 0), Vector2i(0, -1)]
+	var offsets_even: Array[Vector2i] = [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, -1), Vector2i(-1, -1), Vector2i(0, 1), Vector2i(-1, 1)]
+	var offsets_odd: Array[Vector2i] = [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(1, -1), Vector2i(0, -1), Vector2i(1, 1), Vector2i(0, 1)]
 	var output: Array[Vector2i] = []
-	for offset in (offsets_odd if hex.x & 1 else offsets_even):
+	for offset in (offsets_odd if hex.y & 1 else offsets_even):
 		output.append(hex + offset)
 	return output
 

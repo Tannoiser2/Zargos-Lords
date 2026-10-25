@@ -1,7 +1,8 @@
 extends Node3D
 
-const BOARD_SIZE := Vector2(16.0, 10.889)
-const HEX_RADIUS := 0.245
+const BOARD_SIZE := Vector2(16.0, 10.73828125)
+const HEX_RADIUS := 0.11616705
+const GRID_ORIGIN := Vector2(-7.9447363, -5.227517)
 
 var state := ZargosGameState.new()
 var board_data := ZargosBoardData.new()
@@ -116,7 +117,7 @@ func _build_board() -> void:
 	var map_plane := PlaneMesh.new()
 	map_plane.size = BOARD_SIZE
 	var map_material := StandardMaterial3D.new()
-	map_material.albedo_texture = load("res://assets/board/zargo_board_original.jpg")
+	map_material.albedo_texture = load("res://Mappa 2.png")
 	map_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	map_material.roughness = 0.78
 	map_plane.material = map_material
@@ -155,8 +156,8 @@ func _build_hex_overlay() -> void:
 		for row in range(ZargosRules.BOARD_ROWS):
 			var center := hex_to_world(Vector2i(column, row)) + Vector3(0, 0.125, 0)
 			for side in range(6):
-				var a := deg_to_rad(60.0 * side)
-				var b := deg_to_rad(60.0 * (side + 1))
+				var a := deg_to_rad(60.0 * side - 90.0)
+				var b := deg_to_rad(60.0 * (side + 1) - 90.0)
 				mesh.surface_add_vertex(center + Vector3(cos(a) * HEX_RADIUS, 0, sin(a) * HEX_RADIUS))
 				mesh.surface_add_vertex(center + Vector3(cos(b) * HEX_RADIUS, 0, sin(b) * HEX_RADIUS))
 	mesh.surface_end()
@@ -189,8 +190,8 @@ func _build_hex_overlay() -> void:
 					continue
 				var center := hex_to_world(hex) + Vector3(0, 0.124, 0)
 				for side in range(6):
-					var a := deg_to_rad(60.0 * side)
-					var b := deg_to_rad(60.0 * (side + 1))
+					var a := deg_to_rad(60.0 * side - 90.0)
+					var b := deg_to_rad(60.0 * (side + 1) - 90.0)
 					terrain_mesh.surface_add_vertex(center)
 					terrain_mesh.surface_add_vertex(center + Vector3(cos(a) * HEX_RADIUS * 0.91, 0, sin(a) * HEX_RADIUS * 0.91))
 					terrain_mesh.surface_add_vertex(center + Vector3(cos(b) * HEX_RADIUS * 0.91, 0, sin(b) * HEX_RADIUS * 0.91))
@@ -242,8 +243,8 @@ func _show_reachable_hexes(unit: CardboardUnit) -> void:
 			continue
 		var center := hex_to_world(hex) + Vector3(0, 0.132, 0)
 		for side in range(6):
-			var a := deg_to_rad(60.0 * side)
-			var b := deg_to_rad(60.0 * (side + 1))
+			var a := deg_to_rad(60.0 * side - 90.0)
+			var b := deg_to_rad(60.0 * (side + 1) - 90.0)
 			mesh.surface_add_vertex(center)
 			mesh.surface_add_vertex(center + Vector3(cos(a) * HEX_RADIUS * 0.88, 0, sin(a) * HEX_RADIUS * 0.88))
 			mesh.surface_add_vertex(center + Vector3(cos(b) * HEX_RADIUS * 0.88, 0, sin(b) * HEX_RADIUS * 0.88))
@@ -790,7 +791,7 @@ func _spawn_armies(territory_owners: Dictionary) -> void:
 	}
 	for territory: StringName in territory_owners:
 		var faction: StringName = territory_owners[territory]
-		var base: Vector2i = homes[territory]
+		var base: Vector2i = _legacy_hex(homes[territory])
 		var index := 0
 		for unit_type in ZargosRules.UNIT_TYPES[faction].keys():
 			var offset := Vector2i(index % 2, index / 2)
@@ -806,7 +807,8 @@ func _spawn_cities(territory_owners: Dictionary) -> void:
 	}
 	for territory: StringName in territory_owners:
 		var faction: StringName = territory_owners[territory]
-		for city_hex in locations[territory]:
+		for legacy_city_hex in locations[territory]:
+			var city_hex := _legacy_hex(legacy_city_hex)
 			var city := CardboardCity.new()
 			add_child(city)
 			city.setup(faction, city_hex)
@@ -934,18 +936,23 @@ func _schedule_online_publish(delay := 0.0) -> void:
 		, CONNECT_ONE_SHOT)
 
 func hex_to_world(hex: Vector2i) -> Vector3:
-	var row_height := HEX_RADIUS * sqrt(3.0)
-	var x := (hex.x - (ZargosRules.BOARD_COLUMNS - 1) * 0.5) * HEX_RADIUS * 1.5
-	var z := (hex.y - (ZargosRules.BOARD_ROWS - 1) * 0.5) * row_height
-	if hex.x & 1:
-		z += row_height * 0.5
+	var column_width := HEX_RADIUS * sqrt(3.0)
+	var x := GRID_ORIGIN.x + hex.x * column_width
+	if hex.y & 1:
+		x += column_width * 0.5
+	var z := GRID_ORIGIN.y + hex.y * HEX_RADIUS * 1.5
 	return Vector3(x, 0.0, z)
 
+func _legacy_hex(old_hex: Vector2i) -> Vector2i:
+	return Vector2i(
+		roundi(float(old_hex.x) * float(ZargosRules.BOARD_COLUMNS - 1) / 35.0),
+		roundi(float(old_hex.y) * float(ZargosRules.BOARD_ROWS - 1) / 23.0)
+	)
+
 func world_to_hex(point: Vector3) -> Vector2i:
-	var row_height := HEX_RADIUS * sqrt(3.0)
-	var column := int(round(point.x / (HEX_RADIUS * 1.5) + (ZargosRules.BOARD_COLUMNS - 1) * 0.5))
-	var z_offset := row_height * 0.5 if column & 1 else 0.0
-	var row := int(round((point.z - z_offset) / row_height + (ZargosRules.BOARD_ROWS - 1) * 0.5))
+	var row := int(round((point.z - GRID_ORIGIN.y) / (HEX_RADIUS * 1.5)))
+	var row_offset := HEX_RADIUS * sqrt(3.0) * 0.5 if row & 1 else 0.0
+	var column := int(round((point.x - GRID_ORIGIN.x - row_offset) / (HEX_RADIUS * sqrt(3.0))))
 	return Vector2i(clampi(column, 0, ZargosRules.BOARD_COLUMNS - 1), clampi(row, 0, ZargosRules.BOARD_ROWS - 1))
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -1469,8 +1476,8 @@ func _show_vanish_destinations(unit: CardboardUnit) -> void:
 			continue
 		var center := hex_to_world(hex) + Vector3(0, 0.132, 0)
 		for side in range(6):
-			var a := deg_to_rad(60.0 * side)
-			var b := deg_to_rad(60.0 * (side + 1))
+			var a := deg_to_rad(60.0 * side - 90.0)
+			var b := deg_to_rad(60.0 * (side + 1) - 90.0)
 			mesh.surface_add_vertex(center)
 			mesh.surface_add_vertex(center + Vector3(cos(a) * HEX_RADIUS * 0.88, 0, sin(a) * HEX_RADIUS * 0.88))
 			mesh.surface_add_vertex(center + Vector3(cos(b) * HEX_RADIUS * 0.88, 0, sin(b) * HEX_RADIUS * 0.88))
@@ -1933,12 +1940,7 @@ func _eliminate_unit(unit: CardboardUnit, threat: CardboardUnit = null) -> void:
 	tween.tween_callback(unit.queue_free)
 
 func _hex_neighbors(hex: Vector2i) -> Array[Vector2i]:
-	var offsets_even: Array[Vector2i] = [Vector2i(1, -1), Vector2i(1, 0), Vector2i(0, 1), Vector2i(-1, 0), Vector2i(-1, -1), Vector2i(0, -1)]
-	var offsets_odd: Array[Vector2i] = [Vector2i(1, 0), Vector2i(1, 1), Vector2i(0, 1), Vector2i(-1, 1), Vector2i(-1, 0), Vector2i(0, -1)]
-	var output: Array[Vector2i] = []
-	for offset in (offsets_odd if hex.x & 1 else offsets_even):
-		output.append(hex + offset)
-	return output
+	return ZargosBoardData.neighbors(hex)
 
 func _map_neighbors(hex: Vector2i) -> Array[Vector2i]:
 	return board_data.planetary_neighbors(hex)

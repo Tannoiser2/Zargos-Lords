@@ -8,8 +8,8 @@ const FACTIONS := [&"Cavalieri", &"Draghi", &"Alati", &"Monaci"]
 const MONTH_LIMIT := 25
 # Reticolo della scansione originale. Non viene disegnato sopra la mappa: serve
 # soltanto a posare le pedine sui centri degli esagoni già stampati.
-const BOARD_COLUMNS := 36
-const BOARD_ROWS := 24
+const BOARD_COLUMNS := 80
+const BOARD_ROWS := 61
 
 const COMBAT_BANDS := [
 	Vector2i(-5, -2), Vector2i(-1, 0), Vector2i(1, 3), Vector2i(4, 7),
@@ -108,10 +108,12 @@ static func defense_bonus(terrain: Terrain) -> int:
 		_: return 0
 
 static func hex_distance(a: Vector2i, b: Vector2i) -> int:
-	var aq := a.x
-	var ar := a.y - (a.x - (a.x & 1)) / 2
-	var bq := b.x
-	var br := b.y - (b.x - (b.x & 1)) / 2
+	# Coordinate odd-r: la nuova mappa TTS ha esagoni con la punta in alto
+	# e righe dispari traslate di mezzo esagono verso destra.
+	var aq := a.x - (a.y - (a.y & 1)) / 2
+	var ar := a.y
+	var bq := b.x - (b.y - (b.y & 1)) / 2
+	var br := b.y
 	return int((abs(aq - bq) + abs(aq + ar - bq - br) + abs(ar - br)) / 2)
 
 static func resolve_combat(attacker_strength: int, defender_strength: int, die: int) -> Dictionary:
