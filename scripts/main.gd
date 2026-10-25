@@ -66,13 +66,28 @@ func _build_board() -> void:
 	var mesh_instance := MeshInstance3D.new()
 	var box := BoxMesh.new()
 	box.size = Vector3(BOARD_SIZE.x, 0.22, BOARD_SIZE.y)
-	var material := StandardMaterial3D.new()
-	material.albedo_texture = load("res://assets/board/zargo_board_original.jpg")
-	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	material.roughness = 0.78
-	box.material = material
+	var support_material := StandardMaterial3D.new()
+	support_material.albedo_color = Color("6b4329")
+	support_material.roughness = 0.78
+	box.material = support_material
 	mesh_instance.mesh = box
 	board.add_child(mesh_instance)
+
+	# BoxMesh ripartisce le coordinate UV fra le sei facce e sulla faccia
+	# superiore mostrerebbe soltanto una porzione della scansione. La mappa
+	# originale viene quindi posata integralmente su un piano dedicato.
+	var map_face := MeshInstance3D.new()
+	map_face.name = "OriginalMapFace"
+	var map_plane := PlaneMesh.new()
+	map_plane.size = BOARD_SIZE
+	var map_material := StandardMaterial3D.new()
+	map_material.albedo_texture = load("res://assets/board/zargo_board_original.jpg")
+	map_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	map_material.roughness = 0.78
+	map_plane.material = map_material
+	map_face.mesh = map_plane
+	map_face.position.y = 0.112
+	board.add_child(map_face)
 
 	var collision := CollisionShape3D.new()
 	var shape := BoxShape3D.new()
