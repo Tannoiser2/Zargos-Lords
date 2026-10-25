@@ -21,6 +21,8 @@ Il repository contiene per ora il materiale di riferimento del gioco base:
 - evidenziazione delle destinazioni raggiungibili e zone d'influenza nemiche;
 - preparazione della partita con scelta di 2, 3 o 4 popoli e del popolo umano;
 - menu illustrato con copertina e pedine originali, ispirato alla grafica International Team;
+- interfaccia in partita a cornice, senza finestre flottanti sulla mappa, con plancia illustrata delle pedine disponibili;
+- selezione e inquadratura delle unità tramite i pulsanti con la grafica originale delle pedine;
 - controllo indipendente Umano, IA o Esclusa per ciascuno dei quattro popoli;
 - modalità osservatore con quattro IA che disputano autonomamente la partita;
 - pannello dedicato a *Zargo's Lords 2*, con Amazzoni e Arachnidi predisposte per la futura espansione;

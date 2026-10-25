@@ -10,6 +10,12 @@ func _run() -> void:
 	await process_frame
 	game._start_new_game(2, 0)
 	await process_frame
+	var cavalry_units: Array[CardboardUnit] = game._units_for_faction(&"Cavalieri")
+	assert(game.unit_tray.get_child_count() == cavalry_units.size())
+	var tray_unit: CardboardUnit = cavalry_units[0]
+	game._select_unit_from_tray(tray_unit)
+	assert(game.selected == tray_unit)
+	assert(game.unit_tray.get_child(0).icon != null)
 	game._set_grid_visible(true)
 	assert(game.grid_overlay.visible)
 	var old_camera_position: Vector3 = game.camera_rig.position

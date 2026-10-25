@@ -19,6 +19,10 @@ var escort_button: Button
 var special_button: Button
 var deployment_button: Button
 var grid_button: CheckButton
+var unit_tray: HBoxContainer
+var unit_tray_title: Label
+var next_phase_button: Button
+var battle_button: Button
 var grid_overlay: MeshInstance3D
 var movement_overlay: MeshInstance3D
 var rng := RandomNumberGenerator.new()
@@ -223,98 +227,145 @@ func _build_lights() -> void:
 func _build_ui() -> void:
 	var layer := CanvasLayer.new()
 	add_child(layer)
-	var panel := PanelContainer.new()
-	panel.position = Vector2(20, 18)
-	panel.custom_minimum_size = Vector2(450, 164)
-	var style := StyleBoxFlat.new()
-	style.bg_color = Color("23150fdd")
-	style.border_color = Color("b98b42")
-	style.set_border_width_all(2)
-	style.set_corner_radius_all(8)
-	style.content_margin_left = 18
-	style.content_margin_right = 18
-	style.content_margin_top = 14
-	style.content_margin_bottom = 14
-	panel.add_theme_stylebox_override("panel", style)
-	layer.add_child(panel)
-	var stack := VBoxContainer.new()
-	stack.add_theme_constant_override("separation", 8)
-	panel.add_child(stack)
+
+	# La plancia di comando e' una cornice ancorata ai bordi: non esiste piu'
+	# una finestra flottante che nasconde una porzione della mappa.
+	var top_bar := PanelContainer.new()
+	top_bar.set_anchors_preset(Control.PRESET_TOP_WIDE)
+	top_bar.offset_bottom = 82
+	var top_style := StyleBoxFlat.new()
+	top_style.bg_color = Color("21120df2")
+	top_style.border_color = Color("bd873a")
+	top_style.border_width_bottom = 3
+	top_style.content_margin_left = 18
+	top_style.content_margin_right = 18
+	top_style.content_margin_top = 8
+	top_style.content_margin_bottom = 8
+	top_bar.add_theme_stylebox_override("panel", top_style)
+	layer.add_child(top_bar)
+	var top_row := HBoxContainer.new()
+	top_row.add_theme_constant_override("separation", 18)
+	top_bar.add_child(top_row)
 	var title := Label.new()
-	title.text = "ZARGO'S LORDS"
-	title.add_theme_font_size_override("font_size", 27)
-	title.add_theme_color_override("font_color", Color("e4b656"))
-	stack.add_child(title)
+	title.text = "ZARGO'S\nLORDS"
+	title.custom_minimum_size.x = 145
+	title.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	title.add_theme_font_size_override("font_size", 23)
+	title.add_theme_color_override("font_color", Color("e9bd61"))
+	top_row.add_child(title)
+	var readout := VBoxContainer.new()
+	readout.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	readout.add_theme_constant_override("separation", 2)
+	top_row.add_child(readout)
 	status_label = Label.new()
-	status_label.add_theme_font_size_override("font_size", 18)
-	stack.add_child(status_label)
+	status_label.add_theme_font_size_override("font_size", 20)
+	status_label.add_theme_color_override("font_color", Color("f3d893"))
+	readout.add_child(status_label)
 	details_label = Label.new()
 	details_label.text = "Seleziona una pedina attiva, poi un esagono di destinazione."
 	details_label.add_theme_color_override("font_color", Color("dfd0b7"))
-	stack.add_child(details_label)
+	details_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	readout.add_child(details_label)
 	score_label = Label.new()
 	score_label.add_theme_font_size_override("font_size", 14)
 	score_label.add_theme_color_override("font_color", Color("cbb68f"))
-	stack.add_child(score_label)
-	var buttons := HFlowContainer.new()
-	stack.add_child(buttons)
-	var next := Button.new()
-	next.text = "Fase successiva"
-	next.pressed.connect(_on_next_phase)
-	buttons.add_child(next)
-	var battle := Button.new()
-	battle.text = "Risolvi scontro"
-	battle.pressed.connect(_on_resolve_battle)
-	buttons.add_child(battle)
+	readout.add_child(score_label)
+
+	grid_button = CheckButton.new()
+	grid_button.text = "RETICOLO\n[G]"
+	grid_button.custom_minimum_size = Vector2(105, 58)
+	grid_button.add_theme_font_size_override("font_size", 14)
+	grid_button.add_theme_color_override("font_color", Color("7deeff"))
+	grid_button.toggled.connect(_set_grid_visible)
+	top_row.add_child(grid_button)
+	var reset_view := Button.new()
+	reset_view.text = "CENTRA\nVISTA"
+	reset_view.custom_minimum_size = Vector2(105, 58)
+	reset_view.pressed.connect(_reset_camera)
+	top_row.add_child(reset_view)
+
+	var bottom_bar := PanelContainer.new()
+	bottom_bar.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
+	bottom_bar.offset_top = -132
+	var bottom_style := StyleBoxFlat.new()
+	bottom_style.bg_color = Color("21120df2")
+	bottom_style.border_color = Color("bd873a")
+	bottom_style.border_width_top = 3
+	bottom_style.content_margin_left = 16
+	bottom_style.content_margin_right = 16
+	bottom_style.content_margin_top = 8
+	bottom_style.content_margin_bottom = 7
+	bottom_bar.add_theme_stylebox_override("panel", bottom_style)
+	layer.add_child(bottom_bar)
+	var bottom_row := HBoxContainer.new()
+	bottom_row.add_theme_constant_override("separation", 14)
+	bottom_bar.add_child(bottom_row)
+	var army_column := VBoxContainer.new()
+	army_column.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	army_column.add_theme_constant_override("separation", 3)
+	bottom_row.add_child(army_column)
+	unit_tray_title = Label.new()
+	unit_tray_title.text = "PEDINE DISPONIBILI"
+	unit_tray_title.add_theme_font_size_override("font_size", 14)
+	unit_tray_title.add_theme_color_override("font_color", Color("e9bd61"))
+	army_column.add_child(unit_tray_title)
+	var unit_scroll := ScrollContainer.new()
+	unit_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
+	unit_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	unit_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	army_column.add_child(unit_scroll)
+	unit_tray = HBoxContainer.new()
+	unit_tray.add_theme_constant_override("separation", 8)
+	unit_scroll.add_child(unit_tray)
+
+	var commands := VBoxContainer.new()
+	commands.custom_minimum_size.x = 335
+	commands.add_theme_constant_override("separation", 5)
+	bottom_row.add_child(commands)
+	var primary_commands := HBoxContainer.new()
+	primary_commands.add_theme_constant_override("separation", 6)
+	commands.add_child(primary_commands)
+	next_phase_button = Button.new()
+	next_phase_button.text = "FASE SUCCESSIVA"
+	next_phase_button.custom_minimum_size = Vector2(158, 38)
+	next_phase_button.pressed.connect(_on_next_phase)
+	primary_commands.add_child(next_phase_button)
+	battle_button = Button.new()
+	battle_button.text = "RISOLVI SCONTRO"
+	battle_button.custom_minimum_size = Vector2(158, 38)
+	battle_button.pressed.connect(_on_resolve_battle)
+	primary_commands.add_child(battle_button)
+	var secondary_commands := HFlowContainer.new()
+	secondary_commands.add_theme_constant_override("h_separation", 5)
+	commands.add_child(secondary_commands)
 	escort_button = Button.new()
 	escort_button.text = "Separa scorta"
 	escort_button.visible = false
 	escort_button.pressed.connect(_on_detach_escort)
-	buttons.add_child(escort_button)
+	secondary_commands.add_child(escort_button)
 	special_button = Button.new()
 	special_button.text = "Sparisci"
 	special_button.visible = false
 	special_button.pressed.connect(_on_monk_power)
-	buttons.add_child(special_button)
-	var reset_view := Button.new()
-	reset_view.text = "Centra vista"
-	reset_view.pressed.connect(_reset_camera)
-	buttons.add_child(reset_view)
+	secondary_commands.add_child(special_button)
 	ai_button = CheckButton.new()
-	ai_button.text = "IA avversari"
+	ai_button.text = "IA"
 	ai_button.toggled.connect(_on_ai_toggled)
-	buttons.add_child(ai_button)
+	secondary_commands.add_child(ai_button)
 	deployment_button = Button.new()
-	deployment_button.text = "Termina schieramento"
+	deployment_button.text = "TERMINA SCHIERAMENTO"
 	deployment_button.visible = false
 	deployment_button.pressed.connect(_finish_deployment)
-	buttons.add_child(deployment_button)
-
-	grid_button = CheckButton.new()
-	grid_button.text = "RETICOLO ESAGONI  [G]"
-	grid_button.set_anchors_preset(Control.PRESET_TOP_RIGHT)
-	grid_button.position = Vector2(-260, 22)
-	grid_button.custom_minimum_size = Vector2(235, 42)
-	grid_button.add_theme_font_size_override("font_size", 16)
-	grid_button.add_theme_color_override("font_color", Color("7deeff"))
-	grid_button.toggled.connect(_set_grid_visible)
-	layer.add_child(grid_button)
+	secondary_commands.add_child(deployment_button)
 
 	event_label = Label.new()
-	event_label.position = Vector2(20, 194)
-	event_label.size = Vector2(640, 32)
-	event_label.add_theme_font_size_override("font_size", 16)
+	event_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	event_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	event_label.add_theme_font_size_override("font_size", 14)
 	event_label.add_theme_color_override("font_color", Color("f0c977"))
-	layer.add_child(event_label)
+	commands.add_child(event_label)
 
-	var help := Label.new()
-	help.text = "Trascina sinistro: sposta  •  Clic sinistro: seleziona  •  Destro: ruota  •  Rotella: zoom  •  G: reticolo"
-	help.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	help.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
-	help.offset_top = -42
-	help.offset_bottom = -12
-	help.add_theme_color_override("font_color", Color("f3dfbd"))
-	layer.add_child(help)
+	_rebuild_unit_tray()
 
 func _build_setup_screen() -> void:
 	setup_layer = CanvasLayer.new()
@@ -961,12 +1012,67 @@ func _select_unit(unit: CardboardUnit) -> void:
 		escort_button.visible = false
 		_update_special_button()
 		details_label.text = "Nessuna pedina selezionata."
+		_rebuild_unit_tray()
 		return
 	selected.set_selected(true)
 	escort_button.visible = selected.guard_target != null or selected.guard_unit != null
 	_update_special_button()
 	_show_reachable_hexes(selected)
 	details_label.text = "%s • %s • Movimento %d • Combattimento %d%s" % [selected.faction, selected.unit_type, selected.movement, selected.combat, " • " + selected.ability if selected.ability else ""]
+	_rebuild_unit_tray()
+
+func _select_unit_from_tray(unit: CardboardUnit) -> void:
+	if not is_instance_valid(unit):
+		return
+	if deployment_mode:
+		_select_deployment_unit(unit)
+	elif state.phase == ZargosRules.Phase.COMBAT:
+		_toggle_combat_attacker(unit)
+	else:
+		_select_unit(unit)
+	camera_rig.position.x = clampf(unit.position.x, -7.0, 7.0)
+	camera_rig.position.z = clampf(unit.position.z, -5.0, 5.0)
+	_update_camera()
+	_rebuild_unit_tray()
+
+func _rebuild_unit_tray() -> void:
+	if not is_instance_valid(unit_tray):
+		return
+	for child in unit_tray.get_children():
+		unit_tray.remove_child(child)
+		child.queue_free()
+	var shown_factions: Array[StringName] = [state.active_faction()]
+	if deployment_mode:
+		shown_factions.clear()
+		for faction in state.factions:
+			if _is_human_controller(faction):
+				shown_factions.append(faction)
+	unit_tray_title.text = "FORZE UMANE • SCHIERAMENTO" if deployment_mode else "%s • %s" % [String(state.active_faction()).to_upper(), state.phase_name().to_upper()]
+	var tray_units: Array[CardboardUnit] = []
+	for faction in shown_factions:
+		tray_units.append_array(_units_for_faction(faction))
+	for unit in tray_units:
+		if unit.vanished or not unit.visible:
+			continue
+		var button := Button.new()
+		button.custom_minimum_size = Vector2(78, 82)
+		button.icon = CardboardUnit.COUNTER_TEXTURES[unit.faction][unit.unit_type]
+		button.expand_icon = true
+		button.add_theme_constant_override("icon_max_width", 58)
+		button.tooltip_text = "%s • Movimento %d • Combattimento %d%s" % [unit.unit_type, unit.movement, unit.combat, " • " + unit.ability if unit.ability else ""]
+		button.toggle_mode = true
+		button.button_pressed = unit == selected or unit in combat_group
+		var unavailable := state.phase == ZargosRules.Phase.ALLIANCES or _controller_for(unit.faction) != "human"
+		if not deployment_mode:
+			unavailable = unavailable or unit.faction != state.active_faction()
+			if state.phase == ZargosRules.Phase.MOVEMENT:
+				unavailable = unavailable or unit.moved
+			elif state.phase == ZargosRules.Phase.COMBAT:
+				unavailable = unavailable or unit.acted
+		button.disabled = unavailable or (online_mode and unit.faction != human_faction)
+		button.modulate = Color(1, 1, 1, 0.42) if button.disabled else Color.WHITE
+		button.pressed.connect(_select_unit_from_tray.bind(unit))
+		unit_tray.add_child(button)
 
 func _select_deployment_unit(unit: CardboardUnit) -> void:
 	if not _is_human_controller(unit.faction):
@@ -976,6 +1082,7 @@ func _select_deployment_unit(unit: CardboardUnit) -> void:
 	selected = unit
 	selected.set_selected(true)
 	details_label.text = "SCHIERAMENTO • %s • %s • scegli un esagono libero sui tuoi continenti" % [unit.faction, unit.unit_type]
+	_rebuild_unit_tray()
 
 func _select_deployment_city(city: CardboardCity) -> void:
 	if not _is_human_controller(city.faction):
@@ -1054,6 +1161,7 @@ func _toggle_combat_attacker(unit: CardboardUnit) -> void:
 	selected = combat_group.back() if not combat_group.is_empty() else null
 	movement_overlay.mesh = null
 	details_label.text = "Attacco combinato: %d pedine • forza base %d • seleziona il difensore" % [combat_group.size(), _group_base_strength()]
+	_rebuild_unit_tray()
 
 func _clear_combat_group() -> void:
 	for unit in combat_group:
@@ -1756,6 +1864,12 @@ func _refresh_ui() -> void:
 		_show_event("Fine della partita • Vincitori: %s" % ", ".join(state.winners()))
 	elif not deployment_mode and ai_enabled and _controller_for(state.active_faction()) == "ai" and not ai_running:
 		call_deferred("_run_ai_turn")
+	if is_instance_valid(next_phase_button):
+		next_phase_button.text = "CONCLUDI %s" % state.phase_name().to_upper()
+		next_phase_button.disabled = state.game_over or deployment_mode or _controller_for(state.active_faction()) != "human"
+	if is_instance_valid(battle_button):
+		battle_button.visible = state.phase == ZargosRules.Phase.COMBAT and not deployment_mode
+	_rebuild_unit_tray()
 	_update_special_button()
 
 func _show_event(message: String) -> void:
