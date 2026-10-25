@@ -30,6 +30,7 @@ Il repository contiene per ora il materiale di riferimento del gioco base:
 - formazione e separazione delle scorte, arretramento congiunto e fuga dello scortato se il fante viene eliminato;
 - sparizione dei Signori Monaci e ricomparsa nella mossa successiva con vincoli di mare e gorghi;
 - carica rettilinea dei Signori Cavalieri con bonus frontale e laterale;
+- linea di tiro rettilinea dei Fantarcieri con blocchi di terreno, città e boschi;
 - frecce, fiamme e visioni selezionando direttamente il bersaglio;
 - accumulo dei colpi a distanza sullo stesso bersaglio nel turno;
 - città tridimensionali, conquista e conteggio per fazione;

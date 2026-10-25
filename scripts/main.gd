@@ -1022,6 +1022,11 @@ func _resolve_ranged_attack(attacker: CardboardUnit, defender: CardboardUnit, di
 				_show_event("Bersaglio oltre la gittata massima degli arcieri.")
 				attacker.acted = false
 				return
+			var line_result := _arrow_line_result(attacker, defender)
+			if not line_result.clear:
+				_show_event(line_result.message)
+				attacker.acted = false
+				return
 			_apply_ranged_hits(attacker, defender, die, ZargosRules.arrow_hits(die, distance), "Frecce")
 		"Fiamme":
 			if distance > 5:
@@ -1039,6 +1044,32 @@ func _resolve_ranged_attack(attacker: CardboardUnit, defender: CardboardUnit, di
 			_show_event("Visione • dado %d • distanza %d: %s arretra di %d" % [die, distance, defender.unit_type, retreat])
 			if retreat > 0:
 				_retreat_unit(defender, attacker, retreat)
+
+func _arrow_line_result(attacker: CardboardUnit, defender: CardboardUnit) -> Dictionary:
+	if board_data.terrain_at(attacker.hex) == ZargosRules.Terrain.FOREST:
+		return {"clear": false, "message": "I Fantarcieri non possono tirare dall'interno di un bosco."}
+	if board_data.terrain_at(defender.hex) == ZargosRules.Terrain.FOREST:
+		return {"clear": false, "message": "I Fantarcieri non possono colpire un bersaglio dentro un bosco."}
+	var direction := _straight_direction(attacker.hex, defender.hex)
+	if direction < 0:
+		return {"clear": false, "message": "Il tiro degli arcieri deve seguire una linea esagonale retta."}
+	var current := attacker.hex
+	while current != defender.hex:
+		current = _hex_neighbors(current)[direction]
+		if current == defender.hex:
+			break
+		var terrain_type := board_data.terrain_at(current)
+		if terrain_type in [ZargosRules.Terrain.FOREST, ZargosRules.Terrain.MOUNTAIN, ZargosRules.Terrain.MAGIC_VORTEX]:
+			return {"clear": false, "message": "La linea di tiro è bloccata dal terreno."}
+		if _city_at(current):
+			return {"clear": false, "message": "Una città blocca la linea di tiro."}
+	return {"clear": true, "message": ""}
+
+func _city_at(hex: Vector2i) -> CardboardCity:
+	for child in get_children():
+		if child is CardboardCity and child.hex == hex:
+			return child
+	return null
 
 func _apply_ranged_hits(attacker: CardboardUnit, defender: CardboardUnit, die: int, hits: int, attack_name: String) -> void:
 	defender.ranged_hits += hits
@@ -1241,6 +1272,8 @@ func _best_ai_target(unit: CardboardUnit) -> CardboardUnit:
 	var best_distance := 9999
 	for enemy in _enemy_units(unit.faction):
 		var distance := ZargosRules.hex_distance(unit.hex, enemy.hex)
+		if unit.ability == "Tiro" and not _arrow_line_result(unit, enemy).clear:
+			continue
 		if distance <= max_range and distance < best_distance:
 			best = enemy
 			best_distance = distance
