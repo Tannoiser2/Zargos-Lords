@@ -8,10 +8,21 @@ var month := 1
 var active_faction_index := 0
 var phase := ZargosRules.Phase.ALLIANCES
 var game_over := false
+var factions: Array[StringName] = [&"Cavalieri", &"Draghi", &"Alati", &"Monaci"]
 var cities := {&"Cavalieri": 0, &"Draghi": 0, &"Alati": 0, &"Monaci": 0}
 
+func configure(active_factions: Array[StringName]) -> void:
+	factions = active_factions.duplicate()
+	month = 1
+	active_faction_index = 0
+	phase = ZargosRules.Phase.ALLIANCES
+	game_over = false
+	for faction in ZargosRules.FACTIONS:
+		cities[faction] = 0
+	state_changed.emit()
+
 func active_faction() -> StringName:
-	return ZargosRules.FACTIONS[active_faction_index]
+	return factions[active_faction_index]
 
 func phase_name() -> String:
 	return ["Alleanze", "Movimento", "Combattimento"][phase]
@@ -24,7 +35,7 @@ func advance_phase() -> void:
 	else:
 		phase = ZargosRules.Phase.ALLIANCES
 		active_faction_index += 1
-		if active_faction_index >= ZargosRules.FACTIONS.size():
+		if active_faction_index >= factions.size():
 			active_faction_index = 0
 			month += 1
 			if month > ZargosRules.MONTH_LIMIT:
@@ -40,7 +51,7 @@ func summary() -> String:
 
 func city_score() -> String:
 	var parts: PackedStringArray = []
-	for faction in ZargosRules.FACTIONS:
+	for faction in factions:
 		parts.append("%s %d" % [faction, cities[faction]])
 	return "  •  ".join(parts)
 
@@ -57,7 +68,7 @@ func capture_city(old_owner: StringName, new_owner: StringName) -> void:
 func winners() -> PackedStringArray:
 	var best := -1
 	var result: PackedStringArray = []
-	for faction in ZargosRules.FACTIONS:
+	for faction in factions:
 		var score: int = cities[faction]
 		if score > best:
 			best = score

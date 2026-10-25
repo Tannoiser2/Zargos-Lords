@@ -13,6 +13,7 @@ var status_label: Label
 var details_label: Label
 var score_label: Label
 var event_label: Label
+var ai_button: CheckButton
 var grid_overlay: MeshInstance3D
 var movement_overlay: MeshInstance3D
 var rng := RandomNumberGenerator.new()
@@ -23,6 +24,8 @@ var orbit_pitch := -1.18
 var camera_distance := 15.2
 var ai_enabled := false
 var ai_running := false
+var human_faction: StringName = &"Cavalieri"
+var setup_layer: CanvasLayer
 
 func _ready() -> void:
 	rng.randomize()
@@ -33,11 +36,10 @@ func _ready() -> void:
 	_build_camera()
 	_build_lights()
 	_build_ui()
-	_spawn_demo_armies()
-	_spawn_cities()
 	state.state_changed.connect(_refresh_ui)
 	state.log_message.connect(_show_event)
 	_refresh_ui()
+	_build_setup_screen()
 
 func _build_environment() -> void:
 	var environment := WorldEnvironment.new()
@@ -221,7 +223,7 @@ func _build_ui() -> void:
 	reset_view.text = "Centra vista"
 	reset_view.pressed.connect(_reset_camera)
 	buttons.add_child(reset_view)
-	var ai_button := CheckButton.new()
+	ai_button = CheckButton.new()
 	ai_button.text = "IA avversari"
 	ai_button.toggled.connect(_on_ai_toggled)
 	buttons.add_child(ai_button)
@@ -242,28 +244,123 @@ func _build_ui() -> void:
 	help.add_theme_color_override("font_color", Color("f3dfbd"))
 	layer.add_child(help)
 
-func _spawn_demo_armies() -> void:
+func _build_setup_screen() -> void:
+	setup_layer = CanvasLayer.new()
+	setup_layer.layer = 20
+	add_child(setup_layer)
+	var shade := ColorRect.new()
+	shade.color = Color("120b08f2")
+	shade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	setup_layer.add_child(shade)
+	var panel := PanelContainer.new()
+	panel.custom_minimum_size = Vector2(470, 420)
+	panel.set_anchors_preset(Control.PRESET_CENTER)
+	panel.position = Vector2(-235, -210)
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color("2b190f")
+	style.border_color = Color("c49342")
+	style.set_border_width_all(3)
+	style.set_corner_radius_all(10)
+	style.set_content_margin_all(28)
+	panel.add_theme_stylebox_override("panel", style)
+	setup_layer.add_child(panel)
+	var stack := VBoxContainer.new()
+	stack.add_theme_constant_override("separation", 16)
+	panel.add_child(stack)
+	var title := Label.new()
+	title.text = "ZARGO'S LORDS"
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.add_theme_font_size_override("font_size", 36)
+	title.add_theme_color_override("font_color", Color("e5b75b"))
+	stack.add_child(title)
+	var intro := Label.new()
+	intro.text = "PREPARAZIONE DELLA GUERRA DEI SIGNORI"
+	intro.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	intro.add_theme_color_override("font_color", Color("d9c5a0"))
+	stack.add_child(intro)
+	var player_label := Label.new()
+	player_label.text = "Popoli in gioco"
+	stack.add_child(player_label)
+	var player_count := OptionButton.new()
+	player_count.add_item("2 popoli — due continenti ciascuno", 2)
+	player_count.add_item("3 popoli", 3)
+	player_count.add_item("4 popoli", 4)
+	player_count.select(2)
+	stack.add_child(player_count)
+	var faction_label := Label.new()
+	faction_label.text = "Il tuo popolo"
+	stack.add_child(faction_label)
+	var faction_choice := OptionButton.new()
+	for faction in ZargosRules.FACTIONS:
+		faction_choice.add_item(String(faction))
+	stack.add_child(faction_choice)
+	var note := Label.new()
+	note.text = "Gli altri popoli saranno controllati dall'IA.\nLo schieramento libero completo verrà aggiunto nel prossimo passaggio."
+	note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	note.add_theme_color_override("font_color", Color("bfae91"))
+	stack.add_child(note)
+	var start := Button.new()
+	start.text = "INIZIA LA PARTITA"
+	start.custom_minimum_size.y = 52
+	start.add_theme_font_size_override("font_size", 19)
+	start.pressed.connect(func(): _start_new_game(player_count.get_selected_id(), faction_choice.selected))
+	stack.add_child(start)
+
+func _start_new_game(player_count: int, human_index: int) -> void:
+	human_faction = ZargosRules.FACTIONS[human_index]
+	var active: Array[StringName] = [human_faction]
+	var cursor := (human_index + 1) % ZargosRules.FACTIONS.size()
+	while active.size() < player_count:
+		var candidate: StringName = ZargosRules.FACTIONS[cursor]
+		if candidate not in active:
+			active.append(candidate)
+		cursor = (cursor + 1) % ZargosRules.FACTIONS.size()
+	state.configure(active)
+	var owners := _territory_owners(active)
+	_spawn_armies(owners)
+	_spawn_cities(owners)
+	ai_button.button_pressed = true
+	setup_layer.queue_free()
+	_show_event("La Guerra dei Signori ha inizio. Tu controlli i %s." % human_faction)
+	_refresh_ui()
+
+func _territory_owners(active: Array[StringName]) -> Dictionary:
+	var territories := ZargosRules.FACTIONS
+	var owners := {}
+	if active.size() == 2:
+		owners[territories[0]] = active[0]
+		owners[territories[2]] = active[0]
+		owners[territories[1]] = active[1]
+		owners[territories[3]] = active[1]
+	else:
+		for index in range(active.size()):
+			owners[territories[index]] = active[index]
+	return owners
+
+func _spawn_armies(territory_owners: Dictionary) -> void:
 	var homes := {
 		&"Cavalieri": Vector2i(13, 10), &"Draghi": Vector2i(39, 10),
 		&"Alati": Vector2i(13, 29), &"Monaci": Vector2i(39, 29)
 	}
-	for faction in ZargosRules.FACTIONS:
-		var base: Vector2i = homes[faction]
+	for territory: StringName in territory_owners:
+		var faction: StringName = territory_owners[territory]
+		var base: Vector2i = homes[territory]
 		var index := 0
 		for unit_type in ZargosRules.UNIT_TYPES[faction].keys():
 			var offset := Vector2i(index % 2, index / 2)
 			_spawn_unit(faction, unit_type, base + offset)
 			index += 1
 
-func _spawn_cities() -> void:
+func _spawn_cities(territory_owners: Dictionary) -> void:
 	var locations := {
 		&"Cavalieri": [Vector2i(8, 6), Vector2i(13, 6), Vector2i(18, 7), Vector2i(9, 12), Vector2i(14, 15), Vector2i(19, 12)],
 		&"Draghi": [Vector2i(33, 6), Vector2i(39, 6), Vector2i(45, 7), Vector2i(34, 12), Vector2i(39, 15), Vector2i(45, 12)],
 		&"Alati": [Vector2i(7, 27), Vector2i(12, 33), Vector2i(18, 34), Vector2i(8, 35), Vector2i(14, 26), Vector2i(20, 29)],
 		&"Monaci": [Vector2i(32, 34), Vector2i(38, 34), Vector2i(45, 32), Vector2i(33, 27), Vector2i(39, 24), Vector2i(45, 27)],
 	}
-	for faction in ZargosRules.FACTIONS:
-		for city_hex in locations[faction]:
+	for territory: StringName in territory_owners:
+		var faction: StringName = territory_owners[territory]
+		for city_hex in locations[territory]:
 			var city := CardboardCity.new()
 			add_child(city)
 			city.setup(faction, city_hex)
@@ -641,7 +738,7 @@ func _refresh_ui() -> void:
 	score_label.text = "Città: " + state.city_score()
 	if state.game_over:
 		_show_event("Fine della partita • Vincitori: %s" % ", ".join(state.winners()))
-	elif ai_enabled and state.active_faction() != &"Cavalieri" and not ai_running:
+	elif ai_enabled and state.active_faction() != human_faction and not ai_running:
 		call_deferred("_run_ai_turn")
 
 func _show_event(message: String) -> void:
@@ -665,7 +762,7 @@ func _on_ai_toggled(enabled: bool) -> void:
 	_refresh_ui()
 
 func _run_ai_turn() -> void:
-	if ai_running or not ai_enabled or state.game_over or state.active_faction() == &"Cavalieri":
+	if ai_running or not ai_enabled or state.game_over or state.active_faction() == human_faction:
 		return
 	ai_running = true
 	var faction := state.active_faction()

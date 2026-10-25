@@ -17,8 +17,10 @@ Il repository contiene per ora il materiale di riferimento del gioco base:
 - camera orbitale con rotazione, ingrandimento e spostamento;
 - pedine esagonali tridimensionali di tipo cartoncino;
 - quattro popoli con valori base di movimento e combattimento;
-- selezione e movimento su una griglia esagonale logica;
-- griglia logica sovrapposta e disattivabile per la calibrazione della mappa;
+- selezione e movimento sul reticolo della scansione originale;
+- evidenziazione delle destinazioni raggiungibili e zone d'influenza nemiche;
+- preparazione della partita con scelta di 2, 3 o 4 popoli e del popolo umano;
+- assegnazione di due continenti per popolo nelle partite a due;
 - sequenza Alleanze, Movimento e Combattimento;
 - ordine di turno Cavalieri, Draghi, Alati e Monaci;
 - calendario di 25 mesi;
@@ -32,10 +34,10 @@ Il repository contiene per ora il materiale di riferimento del gioco base:
 - percorso esagonale con costi di boschi, montagne, mari, ponti e gorghi;
 - bonus difensivi del terreno applicati al combattimento;
 - determinazione del vincitore in base alle città controllate al 25º mese;
-- modalità solitaria iniziale con Cavalieri umani e tre popoli controllati dall'IA;
+- modalità solitaria con popolo umano selezionabile e avversari controllati dall'IA;
 - test automatici delle regole e degli esempi del manuale.
 
-I terreni definitivi, gli schieramenti, gli avversari IA e il multiplayer Firebase verranno aggiunti nelle fasi successive.
+La classificazione definitiva dei terreni, lo schieramento libero completo e il multiplayer Firebase verranno aggiunti nelle fasi successive.
 
 ## Avvio
 
