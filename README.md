@@ -20,6 +20,10 @@ Il repository contiene per ora il materiale di riferimento del gioco base:
 - selezione e movimento sul reticolo della scansione originale;
 - evidenziazione delle destinazioni raggiungibili e zone d'influenza nemiche;
 - preparazione della partita con scelta di 2, 3 o 4 popoli e del popolo umano;
+- menu illustrato con copertina e pedine originali, ispirato alla grafica International Team;
+- controllo indipendente Umano, IA o Esclusa per ciascuno dei quattro popoli;
+- modalità osservatore con quattro IA che disputano autonomamente la partita;
+- pannello dedicato a *Zargo's Lords 2*, con Amazzoni e Arachnidi predisposte per la futura espansione;
 - assegnazione di due continenti per popolo nelle partite a due;
 - schieramento iniziale interattivo di pedine e città sui continenti assegnati;
 - sequenza Alleanze, Movimento e Combattimento;

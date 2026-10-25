@@ -29,6 +29,8 @@ var camera_distance := 15.2
 var ai_enabled := false
 var ai_running := false
 var human_faction: StringName = &"Cavalieri"
+var faction_controllers: Dictionary = {}
+var faction_controller_selectors: Dictionary = {}
 var setup_layer: CanvasLayer
 var reappearing_unit: CardboardUnit
 var deployment_mode := false
@@ -311,93 +313,224 @@ func _build_setup_screen() -> void:
 	setup_layer = CanvasLayer.new()
 	setup_layer.layer = 20
 	add_child(setup_layer)
+	var background := TextureRect.new()
+	background.texture = load("res://zargos-illustration.jpg")
+	background.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	background.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+	background.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	background.modulate = Color(0.58, 0.45, 0.38, 1.0)
+	setup_layer.add_child(background)
 	var shade := ColorRect.new()
-	shade.color = Color("120b08f2")
+	shade.color = Color("100907b8")
 	shade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	setup_layer.add_child(shade)
+	var margin := MarginContainer.new()
+	margin.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	margin.add_theme_constant_override("margin_left", 38)
+	margin.add_theme_constant_override("margin_right", 38)
+	margin.add_theme_constant_override("margin_top", 30)
+	margin.add_theme_constant_override("margin_bottom", 30)
+	setup_layer.add_child(margin)
 	var panel := PanelContainer.new()
-	panel.custom_minimum_size = Vector2(540, 650)
-	panel.set_anchors_preset(Control.PRESET_CENTER)
-	panel.position = Vector2(-270, -325)
 	var style := StyleBoxFlat.new()
-	style.bg_color = Color("2b190f")
-	style.border_color = Color("c49342")
-	style.set_border_width_all(3)
-	style.set_corner_radius_all(10)
-	style.set_content_margin_all(28)
+	style.bg_color = Color("28160ee8")
+	style.border_color = Color("d0a459")
+	style.set_border_width_all(4)
+	style.set_corner_radius_all(14)
+	style.set_content_margin_all(18)
 	panel.add_theme_stylebox_override("panel", style)
-	setup_layer.add_child(panel)
-	var stack := VBoxContainer.new()
-	stack.add_theme_constant_override("separation", 16)
-	panel.add_child(stack)
+	margin.add_child(panel)
+	var columns := HBoxContainer.new()
+	columns.add_theme_constant_override("separation", 22)
+	panel.add_child(columns)
+	var brand := VBoxContainer.new()
+	brand.custom_minimum_size.x = 330
+	brand.add_theme_constant_override("separation", 8)
+	columns.add_child(brand)
 	var title := Label.new()
 	title.text = "ZARGO'S LORDS"
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.add_theme_font_size_override("font_size", 36)
-	title.add_theme_color_override("font_color", Color("e5b75b"))
-	stack.add_child(title)
+	title.add_theme_font_size_override("font_size", 42)
+	title.add_theme_color_override("font_color", Color("e7c174"))
+	brand.add_child(title)
 	var intro := Label.new()
-	intro.text = "PREPARAZIONE DELLA GUERRA DEI SIGNORI"
+	intro.text = "DUELLI MAGICI PER IL POTERE MONDIALE"
 	intro.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	intro.add_theme_color_override("font_color", Color("d9c5a0"))
-	stack.add_child(intro)
-	var player_label := Label.new()
-	player_label.text = "Popoli in gioco"
-	stack.add_child(player_label)
-	var player_count := OptionButton.new()
-	player_count.add_item("2 popoli — due continenti ciascuno", 2)
-	player_count.add_item("3 popoli", 3)
-	player_count.add_item("4 popoli", 4)
-	player_count.select(2)
-	stack.add_child(player_count)
-	var faction_label := Label.new()
-	faction_label.text = "Il tuo popolo"
-	stack.add_child(faction_label)
-	var faction_choice := OptionButton.new()
-	for faction in ZargosRules.FACTIONS:
-		faction_choice.add_item(String(faction))
-	stack.add_child(faction_choice)
-	var note := Label.new()
-	note.text = "Gli altri popoli saranno controllati dall'IA.\nDopo l'avvio potrai disporre liberamente pedine e città sui tuoi continenti."
-	note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	note.add_theme_color_override("font_color", Color("bfae91"))
-	stack.add_child(note)
-	var start := Button.new()
-	start.text = "INIZIA LA PARTITA"
-	start.custom_minimum_size.y = 52
-	start.add_theme_font_size_override("font_size", 19)
-	start.pressed.connect(func(): _start_new_game(player_count.get_selected_id(), faction_choice.selected))
-	stack.add_child(start)
-	var online_separator := HSeparator.new()
-	stack.add_child(online_separator)
-	var online_title := Label.new()
-	online_title.text = "PARTITA ONLINE FIREBASE"
-	online_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	online_title.add_theme_color_override("font_color", Color("e5b75b"))
-	stack.add_child(online_title)
+	intro.add_theme_font_size_override("font_size", 13)
+	intro.add_theme_color_override("font_color", Color("cab58d"))
+	brand.add_child(intro)
+	var cover := TextureRect.new()
+	cover.texture = load("res://zargos.jpg")
+	cover.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	cover.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+	cover.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	cover.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
+	brand.add_child(cover)
+	var edition := Label.new()
+	edition.text = "INTERNATIONAL TEAM • EDIZIONE DIGITALE"
+	edition.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	edition.add_theme_color_override("font_color", Color("b99d71"))
+	brand.add_child(edition)
+
+	var scroll := ScrollContainer.new()
+	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	columns.add_child(scroll)
+	var stack := VBoxContainer.new()
+	stack.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	stack.add_theme_constant_override("separation", 11)
+	scroll.add_child(stack)
+	var setup_title := Label.new()
+	setup_title.text = "CONSIGLIO DI GUERRA"
+	setup_title.add_theme_font_size_override("font_size", 26)
+	setup_title.add_theme_color_override("font_color", Color("f0d49b"))
+	stack.add_child(setup_title)
+	var instructions := Label.new()
+	instructions.text = "Scegli chi guiderà ogni popolo. Con quattro IA puoi assistere alla guerra come osservatore."
+	instructions.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	instructions.add_theme_color_override("font_color", Color("d6c6aa"))
+	stack.add_child(instructions)
+	var faction_grid := GridContainer.new()
+	faction_grid.columns = 2
+	faction_grid.add_theme_constant_override("h_separation", 10)
+	faction_grid.add_theme_constant_override("v_separation", 10)
+	stack.add_child(faction_grid)
+	faction_controller_selectors.clear()
+	for index in range(ZargosRules.FACTIONS.size()):
+		faction_grid.add_child(_build_faction_card(ZargosRules.FACTIONS[index], index))
+
+	var expansion := PanelContainer.new()
+	var expansion_style := StyleBoxFlat.new()
+	expansion_style.bg_color = Color("4a241fbb")
+	expansion_style.border_color = Color("b45d4e")
+	expansion_style.set_border_width_all(2)
+	expansion_style.set_corner_radius_all(8)
+	expansion_style.set_content_margin_all(10)
+	expansion.add_theme_stylebox_override("panel", expansion_style)
+	stack.add_child(expansion)
+	var expansion_row := HBoxContainer.new()
+	expansion_row.add_theme_constant_override("separation", 12)
+	expansion.add_child(expansion_row)
+	var expansion_cover := TextureRect.new()
+	expansion_cover.texture = load("res://zargos2_copertina.jpg")
+	expansion_cover.custom_minimum_size = Vector2(88, 100)
+	expansion_cover.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	expansion_cover.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+	expansion_row.add_child(expansion_cover)
+	var expansion_copy := VBoxContainer.new()
+	expansion_copy.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	expansion_row.add_child(expansion_copy)
+	var expansion_title := Label.new()
+	expansion_title.text = "ZARGO'S LORDS 2 • ESPANSIONE"
+	expansion_title.add_theme_color_override("font_color", Color("f0b096"))
+	expansion_title.add_theme_font_size_override("font_size", 17)
+	expansion_copy.add_child(expansion_title)
+	var expansion_text := Label.new()
+	expansion_text.text = "Amazzoni e Arachnidi • nuove arti magiche e nuove armate"
+	expansion_text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	expansion_text.add_theme_color_override("font_color", Color("d2b5a7"))
+	expansion_copy.add_child(expansion_text)
+	var expansion_toggle := CheckButton.new()
+	expansion_toggle.text = "In preparazione — materiale acquisito"
+	expansion_toggle.disabled = true
+	expansion_copy.add_child(expansion_toggle)
+
+	var online_toggle := CheckButton.new()
+	online_toggle.text = "GIOCO ONLINE • Firebase"
+	online_toggle.add_theme_font_size_override("font_size", 17)
+	stack.add_child(online_toggle)
+	var online_box := VBoxContainer.new()
+	online_box.visible = false
+	online_box.add_theme_constant_override("separation", 7)
+	stack.add_child(online_box)
+	online_toggle.toggled.connect(func(enabled: bool): online_box.visible = enabled)
 	firebase_url_input = LineEdit.new()
 	firebase_url_input.placeholder_text = "Realtime Database URL (https://…firebasedatabase.app)"
-	stack.add_child(firebase_url_input)
+	online_box.add_child(firebase_url_input)
 	firebase_key_input = LineEdit.new()
 	firebase_key_input.placeholder_text = "Firebase Web API key"
-	stack.add_child(firebase_key_input)
+	online_box.add_child(firebase_key_input)
 	_load_firebase_defaults()
 	room_code_input = LineEdit.new()
 	room_code_input.placeholder_text = "Codice stanza (vuoto = generato automaticamente)"
 	room_code_input.max_length = 8
-	stack.add_child(room_code_input)
+	online_box.add_child(room_code_input)
 	var online_buttons := HBoxContainer.new()
-	stack.add_child(online_buttons)
+	online_box.add_child(online_buttons)
 	var host := Button.new()
 	host.text = "Crea stanza"
 	host.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	host.pressed.connect(func(): _begin_online("create", player_count.get_selected_id(), faction_choice.selected))
+	host.pressed.connect(func(): _begin_online_from_menu("create"))
 	online_buttons.add_child(host)
 	var join := Button.new()
 	join.text = "Entra nella stanza"
 	join.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	join.pressed.connect(func(): _begin_online("join", player_count.get_selected_id(), faction_choice.selected))
+	join.pressed.connect(func(): _begin_online_from_menu("join"))
 	online_buttons.add_child(join)
+	var start := Button.new()
+	start.text = "INIZIA LA GUERRA"
+	start.custom_minimum_size.y = 52
+	start.add_theme_font_size_override("font_size", 20)
+	start.pressed.connect(_start_menu_game)
+	stack.add_child(start)
+
+func _build_faction_card(faction: StringName, index: int) -> PanelContainer:
+	var card := PanelContainer.new()
+	card.custom_minimum_size = Vector2(292, 128)
+	card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var card_style := StyleBoxFlat.new()
+	var color: Color = ZargosRules.FACTION_COLORS[faction]
+	card_style.bg_color = Color(color.r * 0.23, color.g * 0.23, color.b * 0.23, 0.94)
+	card_style.border_color = color.lightened(0.12)
+	card_style.set_border_width_all(2)
+	card_style.set_corner_radius_all(8)
+	card_style.set_content_margin_all(9)
+	card.add_theme_stylebox_override("panel", card_style)
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 10)
+	card.add_child(row)
+	var portrait := TextureRect.new()
+	portrait.texture = CardboardUnit.COUNTER_TEXTURES[faction][&"Signore"]
+	portrait.custom_minimum_size = Vector2(88, 88)
+	portrait.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	portrait.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	portrait.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	row.add_child(portrait)
+	var copy := VBoxContainer.new()
+	copy.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(copy)
+	var name_label := Label.new()
+	name_label.text = String(faction).to_upper()
+	name_label.add_theme_font_size_override("font_size", 18)
+	name_label.add_theme_color_override("font_color", color.lightened(0.2))
+	copy.add_child(name_label)
+	var role := Label.new()
+	role.text = ["Acciaio e visioni", "Fiamme e serpenti", "Ali e archi", "Illusione e sparizione"][index]
+	role.add_theme_font_size_override("font_size", 12)
+	role.add_theme_color_override("font_color", Color("d8c7aa"))
+	copy.add_child(role)
+	var selector := OptionButton.new()
+	selector.add_item("Umano")
+	selector.add_item("IA")
+	selector.add_item("Esclusa")
+	selector.select(0 if index == 0 else 1)
+	copy.add_child(selector)
+	faction_controller_selectors[faction] = selector
+	return card
+
+func _begin_online_from_menu(action: String) -> void:
+	var active_count := 0
+	var human_index := -1
+	for index in range(ZargosRules.FACTIONS.size()):
+		var selector: OptionButton = faction_controller_selectors[ZargosRules.FACTIONS[index]]
+		if selector.selected != 2:
+			active_count += 1
+		if selector.selected == 0 and human_index < 0:
+			human_index = index
+	if active_count < 2 or human_index < 0:
+		_show_event("Per il gioco online scegli almeno due popoli e almeno un giocatore Umano.")
+		return
+	_begin_online(action, active_count, human_index)
 
 func _load_firebase_defaults() -> void:
 	if not FileAccess.file_exists("res://firebase_config.json"):
@@ -419,19 +552,57 @@ func _start_new_game(player_count: int, human_index: int) -> void:
 		if candidate not in active:
 			active.append(candidate)
 		cursor = (cursor + 1) % ZargosRules.FACTIONS.size()
+	faction_controllers.clear()
+	for faction in ZargosRules.FACTIONS:
+		faction_controllers[faction] = "human" if faction == human_faction else ("ai" if faction in active else "off")
+	_launch_game(active)
+
+func _start_menu_game() -> void:
+	var active: Array[StringName] = []
+	var humans: Array[StringName] = []
+	faction_controllers.clear()
+	for faction in ZargosRules.FACTIONS:
+		var selector: OptionButton = faction_controller_selectors[faction]
+		var controller: String = ["human", "ai", "off"][selector.selected]
+		faction_controllers[faction] = controller
+		if controller != "off":
+			active.append(faction)
+		if controller == "human":
+			humans.append(faction)
+	if active.size() < 2:
+		_show_event("Attiva almeno due popoli per iniziare la Guerra dei Signori.")
+		return
+	human_faction = humans[0] if not humans.is_empty() else &""
+	_launch_game(active)
+
+func _launch_game(active: Array[StringName]) -> void:
 	state.configure(active)
 	territory_owners = _territory_owners(active)
 	_spawn_armies(territory_owners)
 	_spawn_cities(territory_owners)
-	deployment_mode = true
-	ai_enabled = false
+	var has_humans := faction_controllers.values().has("human")
+	deployment_mode = has_humans
+	ai_enabled = true
 	ai_button.button_pressed = false
-	ai_button.disabled = true
-	deployment_button.visible = true
+	ai_button.disabled = has_humans
+	deployment_button.visible = has_humans
 	setup_layer.queue_free()
-	_show_event("Schieramento dei %s: seleziona una pedina o città, poi un esagono libero del tuo continente." % human_faction)
-	details_label.text = "SCHIERAMENTO • Disponi le tue forze, poi premi Termina schieramento."
+	if has_humans:
+		_show_event("Schieramento: seleziona le pedine e le città dei popoli umani.")
+		details_label.text = "SCHIERAMENTO • Disponi le forze umane, poi premi Termina schieramento."
+	else:
+		ai_button.button_pressed = true
+		_show_event("Modalità osservatore: quattro popoli IA combattono per Zargo.")
+		details_label.text = "MODALITÀ OSSERVATORE • Tutti i popoli sono guidati dall’IA."
 	_refresh_ui()
+
+func _controller_for(faction: StringName) -> String:
+	if online_mode:
+		return "human" if faction == human_faction else "remote"
+	return String(faction_controllers.get(faction, "ai"))
+
+func _is_human_controller(faction: StringName) -> bool:
+	return _controller_for(faction) == "human"
 
 func _begin_online(action: String, player_count: int, human_index: int) -> void:
 	if not online.configure(firebase_url_input.text, firebase_key_input.text):
@@ -770,8 +941,8 @@ func _select_unit(unit: CardboardUnit) -> void:
 	details_label.text = "%s • %s • Movimento %d • Combattimento %d%s" % [selected.faction, selected.unit_type, selected.movement, selected.combat, " • " + selected.ability if selected.ability else ""]
 
 func _select_deployment_unit(unit: CardboardUnit) -> void:
-	if unit.faction != human_faction:
-		_show_event("Durante lo schieramento puoi disporre soltanto le pedine dei %s." % human_faction)
+	if not _is_human_controller(unit.faction):
+		_show_event("Questa fazione è controllata dall’IA e usa lo schieramento automatico.")
 		return
 	_clear_deployment_selection()
 	selected = unit
@@ -779,8 +950,8 @@ func _select_deployment_unit(unit: CardboardUnit) -> void:
 	details_label.text = "SCHIERAMENTO • %s • %s • scegli un esagono libero sui tuoi continenti" % [unit.faction, unit.unit_type]
 
 func _select_deployment_city(city: CardboardCity) -> void:
-	if city.faction != human_faction:
-		_show_event("Durante lo schieramento puoi disporre soltanto le città dei %s." % human_faction)
+	if not _is_human_controller(city.faction):
+		_show_event("Questa fazione è controllata dall’IA e usa lo schieramento automatico.")
 		return
 	_clear_deployment_selection()
 	deployment_city = city
@@ -805,7 +976,8 @@ func _try_deployment_move(destination: Vector2i) -> void:
 		_show_event("Questo esagono non è disponibile per lo schieramento.")
 		return
 	var continent := board_data.continent_at(destination)
-	if territory_owners.get(continent, &"") != human_faction:
+	var deploying_faction: StringName = selected.faction if selected else deployment_city.faction
+	if territory_owners.get(continent, &"") != deploying_faction:
 		_show_event("L'esagono appartiene al continente dei %s." % territory_owners.get(continent, continent))
 		return
 	var occupying_unit := _unit_at(destination)
@@ -836,7 +1008,7 @@ func _finish_deployment() -> void:
 	ai_button.button_pressed = not online_mode
 	if online_mode:
 		ai_button.disabled = true
-	_show_event("Schieramento completato. La Guerra dei Signori ha inizio: tu controlli i %s." % human_faction)
+	_show_event("Schieramento completato. La Guerra dei Signori ha inizio.")
 	details_label.text = "Seleziona una pedina attiva, poi un esagono di destinazione."
 	_refresh_ui()
 	_schedule_online_publish()
@@ -1303,7 +1475,7 @@ func _on_next_phase() -> void:
 	if deployment_mode:
 		_show_event("Termina prima lo schieramento iniziale.")
 		return
-	if online_mode and state.active_faction() != human_faction:
+	if _controller_for(state.active_faction()) != "human":
 		_show_event("Attendi la mossa dei %s." % state.active_faction())
 		return
 	var old_faction := state.active_faction()
@@ -1554,7 +1726,7 @@ func _refresh_ui() -> void:
 		score_label.text += "  •  Online %s" % online.room_code
 	if state.game_over:
 		_show_event("Fine della partita • Vincitori: %s" % ", ".join(state.winners()))
-	elif not deployment_mode and ai_enabled and state.active_faction() != human_faction and not ai_running:
+	elif not deployment_mode and ai_enabled and _controller_for(state.active_faction()) == "ai" and not ai_running:
 		call_deferred("_run_ai_turn")
 	_update_special_button()
 
@@ -1582,7 +1754,7 @@ func _on_ai_toggled(enabled: bool) -> void:
 	_refresh_ui()
 
 func _run_ai_turn() -> void:
-	if deployment_mode or ai_running or not ai_enabled or state.game_over or state.active_faction() == human_faction:
+	if deployment_mode or ai_running or not ai_enabled or state.game_over or _controller_for(state.active_faction()) != "ai":
 		return
 	ai_running = true
 	var faction := state.active_faction()

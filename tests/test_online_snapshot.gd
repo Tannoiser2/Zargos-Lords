@@ -26,5 +26,18 @@ func _run() -> void:
 			city_count += 1
 	assert(unit_count == 16)
 	assert(city_count == 24)
+	game.queue_free()
+	await process_frame
+	var observer = packed.instantiate()
+	root.add_child(observer)
+	await process_frame
+	assert(observer.faction_controller_selectors.size() == 4)
+	for selector in observer.faction_controller_selectors.values():
+		selector.select(1)
+	observer._start_menu_game()
+	observer.ai_enabled = false
+	assert(observer.human_faction == &"")
+	assert(observer.state.factions.size() == 4)
+	assert(not observer.deployment_mode)
 	print("Snapshot online: serializzazione e ripristino superati")
 	quit()
