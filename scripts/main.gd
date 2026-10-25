@@ -16,6 +16,7 @@ var score_label: Label
 var event_label: Label
 var ai_button: CheckButton
 var escort_button: Button
+var special_button: Button
 var grid_overlay: MeshInstance3D
 var movement_overlay: MeshInstance3D
 var rng := RandomNumberGenerator.new()
@@ -28,6 +29,7 @@ var ai_enabled := false
 var ai_running := false
 var human_faction: StringName = &"Cavalieri"
 var setup_layer: CanvasLayer
+var reappearing_unit: CardboardUnit
 
 func _ready() -> void:
 	rng.randomize()
@@ -211,7 +213,7 @@ func _build_ui() -> void:
 	score_label.add_theme_font_size_override("font_size", 14)
 	score_label.add_theme_color_override("font_color", Color("cbb68f"))
 	stack.add_child(score_label)
-	var buttons := HBoxContainer.new()
+	var buttons := HFlowContainer.new()
 	stack.add_child(buttons)
 	var next := Button.new()
 	next.text = "Fase successiva"
@@ -226,6 +228,11 @@ func _build_ui() -> void:
 	escort_button.visible = false
 	escort_button.pressed.connect(_on_detach_escort)
 	buttons.add_child(escort_button)
+	special_button = Button.new()
+	special_button.text = "Sparisci"
+	special_button.visible = false
+	special_button.pressed.connect(_on_monk_power)
+	buttons.add_child(special_button)
 	var reset_view := Button.new()
 	reset_view.text = "Centra vista"
 	reset_view.pressed.connect(_reset_camera)
@@ -419,6 +426,7 @@ func _unhandled_input(event: InputEvent) -> void:
 			camera_rig.position += camera_rig.global_basis.x * -event.relative.x * factor
 			camera_rig.position += Vector3(camera_rig.global_basis.z.x, 0, camera_rig.global_basis.z.z).normalized() * -event.relative.y * factor
 	if event.is_action_pressed("cancel_action"):
+		reappearing_unit = null
 		_select_unit(null)
 
 func _pick_at(screen_position: Vector2) -> void:
@@ -441,8 +449,11 @@ func _pick_at(screen_position: Vector2) -> void:
 			_select_unit(collider)
 	elif collider is CardboardCity:
 		_handle_city_click(collider)
-	elif collider.has_meta("is_board") and selected:
-		_try_move_selected(world_to_hex(hit.position))
+	elif collider.has_meta("is_board"):
+		if reappearing_unit:
+			_try_reappear(world_to_hex(hit.position))
+		elif selected:
+			_try_move_selected(world_to_hex(hit.position))
 
 func _select_unit(unit: CardboardUnit) -> void:
 	_clear_combat_group()
@@ -452,10 +463,12 @@ func _select_unit(unit: CardboardUnit) -> void:
 	if not selected:
 		movement_overlay.mesh = null
 		escort_button.visible = false
+		_update_special_button()
 		details_label.text = "Nessuna pedina selezionata."
 		return
 	selected.set_selected(true)
 	escort_button.visible = selected.guard_target != null or selected.guard_unit != null
+	_update_special_button()
 	_show_reachable_hexes(selected)
 	details_label.text = "%s • %s • Movimento %d • Combattimento %d%s" % [selected.faction, selected.unit_type, selected.movement, selected.combat, " • " + selected.ability if selected.ability else ""]
 
@@ -602,6 +615,102 @@ func _on_detach_escort() -> void:
 	guard.position = hex_to_world(destination) + Vector3(0, 0.18, 0)
 	_select_unit(guard)
 	_show_event("Scorta separata senza consumare il movimento della pedina.")
+
+func _update_special_button() -> void:
+	if not special_button:
+		return
+	var can_vanish := selected and selected.faction == &"Monaci" and selected.unit_type == &"Signore" and state.phase == ZargosRules.Phase.MOVEMENT and selected.faction == state.active_faction() and not selected.moved
+	var can_return := _next_vanished_monk() != null and state.phase == ZargosRules.Phase.MOVEMENT
+	special_button.visible = can_vanish or can_return
+	special_button.text = "Sparisci" if can_vanish else "Ricompari"
+
+func _next_vanished_monk() -> CardboardUnit:
+	for child in get_children():
+		if child is CardboardUnit and child.vanished and child.faction == state.active_faction() and state.month > child.vanished_month:
+			return child
+	return null
+
+func _on_monk_power() -> void:
+	if selected and selected.faction == &"Monaci" and selected.unit_type == &"Signore" and not selected.vanished:
+		if selected.guard_unit:
+			_show_event("Un Monaco sotto scorta non può usare i propri poteri.")
+			return
+		selected.vanished = true
+		selected.vanished_month = state.month
+		selected.vanish_origin = selected.hex
+		selected.moved = true
+		selected.visible = false
+		selected.collision_layer = 0
+		selected.collision_mask = 0
+		_show_event("Il Monaco scompare. Potrà ricomparire nella prossima mossa dei Monaci.")
+		selected = null
+		movement_overlay.mesh = null
+		_update_special_button()
+		return
+	reappearing_unit = _next_vanished_monk()
+	if not reappearing_unit:
+		_show_event("Nessun Monaco può ricomparire in questo momento.")
+		return
+	_show_vanish_destinations(reappearing_unit)
+	details_label.text = "Ricomparsa del Monaco: scegli un esagono evidenziato."
+	_show_event("Il Monaco può ricomparire entro %d esagoni, senza attraversare mari o gorghi." % reappearing_unit.movement)
+
+func _vanish_destinations(unit: CardboardUnit) -> Dictionary:
+	var frontier: Array[Vector2i] = [unit.vanish_origin]
+	var costs := {unit.vanish_origin: 0}
+	while not frontier.is_empty():
+		var current: Vector2i = frontier.pop_front()
+		for neighbor in ZargosBoardData.neighbors(current):
+			if not ZargosBoardData.is_on_board(neighbor):
+				continue
+			var terrain_type := board_data.terrain_at(neighbor)
+			if terrain_type in [ZargosRules.Terrain.SEA, ZargosRules.Terrain.VOID, ZargosRules.Terrain.MAGIC_VORTEX]:
+				continue
+			var cost: int = costs[current] + 1
+			if cost > unit.movement:
+				continue
+			if not costs.has(neighbor) or cost < costs[neighbor]:
+				costs[neighbor] = cost
+				frontier.append(neighbor)
+	return costs
+
+func _show_vanish_destinations(unit: CardboardUnit) -> void:
+	var destinations := _vanish_destinations(unit)
+	var mesh := ImmediateMesh.new()
+	var material := StandardMaterial3D.new()
+	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	material.albedo_color = Color(0.58, 0.34, 0.92, 0.36)
+	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mesh.surface_begin(Mesh.PRIMITIVE_TRIANGLES, material)
+	for hex: Vector2i in destinations:
+		if _unit_at(hex):
+			continue
+		var center := hex_to_world(hex) + Vector3(0, 0.132, 0)
+		for side in range(6):
+			var a := deg_to_rad(60.0 * side)
+			var b := deg_to_rad(60.0 * (side + 1))
+			mesh.surface_add_vertex(center)
+			mesh.surface_add_vertex(center + Vector3(cos(a) * HEX_RADIUS * 0.88, 0, sin(a) * HEX_RADIUS * 0.88))
+			mesh.surface_add_vertex(center + Vector3(cos(b) * HEX_RADIUS * 0.88, 0, sin(b) * HEX_RADIUS * 0.88))
+	mesh.surface_end()
+	movement_overlay.mesh = mesh
+
+func _try_reappear(destination: Vector2i) -> void:
+	if not reappearing_unit or not _vanish_destinations(reappearing_unit).has(destination) or _unit_at(destination):
+		_show_event("Il Monaco non può ricomparire in quell'esagono.")
+		return
+	var unit := reappearing_unit
+	reappearing_unit = null
+	unit.hex = destination
+	unit.position = hex_to_world(destination) + Vector3(0, 0.18, 0)
+	unit.visible = true
+	unit.collision_layer = 1
+	unit.collision_mask = 1
+	unit.vanished = false
+	unit.moved = false
+	unit.acted = false
+	_select_unit(unit)
+	_show_event("Il Monaco ricompare e può muovere e combattere normalmente.")
 
 func _movement_blocked(hex: Vector2i, moving_faction: StringName, flying: bool) -> bool:
 	var unit := _unit_at(hex)
@@ -775,6 +884,7 @@ func _on_next_phase() -> void:
 		for child in get_children():
 			if child is CardboardUnit:
 				child.reset_turn()
+	reappearing_unit = null
 	_select_unit(null)
 
 func _on_resolve_battle() -> void:
@@ -954,6 +1064,7 @@ func _refresh_ui() -> void:
 		_show_event("Fine della partita • Vincitori: %s" % ", ".join(state.winners()))
 	elif ai_enabled and state.active_faction() != human_faction and not ai_running:
 		call_deferred("_run_ai_turn")
+	_update_special_button()
 
 func _show_event(message: String) -> void:
 	event_label.text = message

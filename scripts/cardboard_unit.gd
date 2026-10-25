@@ -13,6 +13,9 @@ var ranged_hits := 0
 var guard_target: CardboardUnit
 var guard_unit: CardboardUnit
 var escort_changed := false
+var vanished := false
+var vanished_month := 0
+var vanish_origin := Vector2i.ZERO
 
 const COUNTER_TEXTURES := {
 	&"Cavalieri": {

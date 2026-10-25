@@ -28,6 +28,7 @@ Il repository contiene per ora il materiale di riferimento del gioco base:
 - risoluzione di eliminazioni e arretramenti, inclusa la fuga bloccata;
 - attacchi normali combinati con più pedine e ritirata dell'intero gruppo;
 - formazione e separazione delle scorte, arretramento congiunto e fuga dello scortato se il fante viene eliminato;
+- sparizione dei Signori Monaci e ricomparsa nella mossa successiva con vincoli di mare e gorghi;
 - frecce, fiamme e visioni selezionando direttamente il bersaglio;
 - accumulo dei colpi a distanza sullo stesso bersaglio nel turno;
 - città tridimensionali, conquista e conteggio per fazione;
