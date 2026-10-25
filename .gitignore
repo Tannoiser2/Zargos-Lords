@@ -1,0 +1,19 @@
+.DS_Store
+
+# Materiale di riferimento non appartenente al gioco base
+Zargo's Reborn.PDF
+zargosl2.doc
+zargosl2-aides.doc
+zargos2-1.jpg
+zargos2-2.jpg
+
+# File generati da Godot
+.godot/
+export.cfg
+export_presets.cfg
+
+# Credenziali e configurazioni locali
+.env
+.env.*
+firebase-debug.log
+
