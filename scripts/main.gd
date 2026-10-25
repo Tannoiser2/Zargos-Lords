@@ -15,6 +15,7 @@ var details_label: Label
 var score_label: Label
 var event_label: Label
 var ai_button: CheckButton
+var escort_button: Button
 var grid_overlay: MeshInstance3D
 var movement_overlay: MeshInstance3D
 var rng := RandomNumberGenerator.new()
@@ -220,6 +221,11 @@ func _build_ui() -> void:
 	battle.text = "Risolvi scontro"
 	battle.pressed.connect(_on_resolve_battle)
 	buttons.add_child(battle)
+	escort_button = Button.new()
+	escort_button.text = "Separa scorta"
+	escort_button.visible = false
+	escort_button.pressed.connect(_on_detach_escort)
+	buttons.add_child(escort_button)
 	var reset_view := Button.new()
 	reset_view.text = "Centra vista"
 	reset_view.pressed.connect(_reset_camera)
@@ -445,9 +451,11 @@ func _select_unit(unit: CardboardUnit) -> void:
 	selected = unit
 	if not selected:
 		movement_overlay.mesh = null
+		escort_button.visible = false
 		details_label.text = "Nessuna pedina selezionata."
 		return
 	selected.set_selected(true)
+	escort_button.visible = selected.guard_target != null or selected.guard_unit != null
 	_show_reachable_hexes(selected)
 	details_label.text = "%s • %s • Movimento %d • Combattimento %d%s" % [selected.faction, selected.unit_type, selected.movement, selected.combat, " • " + selected.ability if selected.ability else ""]
 
@@ -487,6 +495,9 @@ func _try_move_selected(destination: Vector2i) -> void:
 	if selected.moved:
 		_show_event("Questa pedina ha già mosso nel turno corrente.")
 		return
+	if (selected.guard_target or selected.guard_unit) and selected.escort_changed:
+		_show_event("Una scorta non può essere formata e separata nella stessa mossa.")
+		return
 	var flying := selected.ability == "Volo"
 	var movement_cost := board_data.find_movement_cost(
 		selected.hex,
@@ -502,6 +513,9 @@ func _try_move_selected(destination: Vector2i) -> void:
 	var occupant := _unit_at(destination)
 	if occupant and not _can_form_escort(selected, destination):
 		_show_event("L'esagono è già occupato.")
+		return
+	if occupant and (selected.guard_target or selected.guard_unit):
+		_show_event("Non puoi separare una scorta e formarne un'altra nella stessa mossa.")
 		return
 	_detach_escort(selected)
 	selected.hex = destination
@@ -544,19 +558,50 @@ func _form_escort(a: CardboardUnit, b: CardboardUnit) -> void:
 	var protected := b if guard == a else a
 	guard.guard_target = protected
 	protected.guard_unit = guard
+	guard.escort_changed = true
+	protected.escort_changed = true
 	guard.position = hex_to_world(guard.hex) + Vector3(0, 0.24, 0)
 	protected.position = hex_to_world(protected.hex) + Vector3(0, 0.17, 0)
 	_show_event("%s forma una scorta per %s." % [guard.unit_type, protected.unit_type])
 
 func _detach_escort(unit: CardboardUnit) -> void:
 	if unit.guard_target:
+		unit.escort_changed = true
+		unit.guard_target.escort_changed = true
 		unit.guard_target.guard_unit = null
 		unit.guard_target.position = hex_to_world(unit.guard_target.hex) + Vector3(0, 0.18, 0)
 		unit.guard_target = null
 	if unit.guard_unit:
+		unit.escort_changed = true
+		unit.guard_unit.escort_changed = true
 		unit.guard_unit.guard_target = null
 		unit.guard_unit.position = hex_to_world(unit.guard_unit.hex) + Vector3(0, 0.18, 0)
 		unit.guard_unit = null
+
+func _on_detach_escort() -> void:
+	if not selected or state.phase != ZargosRules.Phase.MOVEMENT:
+		_show_event("Le scorte si separano durante la fase Movimento.")
+		return
+	var guard := selected if selected.guard_target else selected.guard_unit
+	if not guard or guard.faction != state.active_faction():
+		_show_event("Puoi separare soltanto una tua scorta attiva.")
+		return
+	if guard.escort_changed:
+		_show_event("La scorta è stata formata in questa mossa e non può essere già separata.")
+		return
+	var protected := guard.guard_target
+	var destinations := _hex_neighbors(guard.hex).filter(func(hex: Vector2i): return _is_on_board(hex) and not _unit_at(hex) and ZargosRules.terrain_cost(board_data.terrain_at(hex)) >= 0)
+	if destinations.is_empty():
+		_show_event("Non c'è un esagono libero in cui separare la scorta.")
+		return
+	var destination: Vector2i = destinations[0]
+	_detach_escort(guard)
+	guard.escort_changed = true
+	protected.escort_changed = true
+	guard.hex = destination
+	guard.position = hex_to_world(destination) + Vector3(0, 0.18, 0)
+	_select_unit(guard)
+	_show_event("Scorta separata senza consumare il movimento della pedina.")
 
 func _movement_blocked(hex: Vector2i, moving_faction: StringName, flying: bool) -> bool:
 	var unit := _unit_at(hex)
@@ -766,8 +811,8 @@ func _resolve_attack(attacker: CardboardUnit, defender: CardboardUnit) -> void:
 	var result := ZargosRules.resolve_combat(attacker_strength, defender_strength, die)
 	_show_event("Dado %d • %s %d contro %s %d: %s [%s]" % [die, attacker.unit_type, attacker_strength, defender.unit_type, defender_strength, result.text, result.result])
 	match result.result:
-		"DE": _eliminate_unit(defender)
-		"AE": _eliminate_unit(attacker)
+		"DE": _eliminate_unit(defender, attacker)
+		"AE": _eliminate_unit(attacker, defender)
 		"IMPOSSIBILE": return
 		_:
 			var retreating := defender if result.retreat > 0 else attacker
@@ -795,10 +840,10 @@ func _resolve_group_attack(defender: CardboardUnit) -> void:
 	_clear_combat_group()
 	selected = null
 	match result.result:
-		"DE": _eliminate_unit(defender)
+		"DE": _eliminate_unit(defender, attackers[0])
 		"AE":
 			for attacker in attackers:
-				_eliminate_unit(attacker)
+				_eliminate_unit(attacker, defender)
 		"IMPOSSIBILE":
 			for attacker in attackers:
 				attacker.acted = false
@@ -818,14 +863,14 @@ func _resolve_ranged_attack(attacker: CardboardUnit, defender: CardboardUnit, di
 				_show_event("Bersaglio oltre la gittata massima degli arcieri.")
 				attacker.acted = false
 				return
-			_apply_ranged_hits(defender, die, ZargosRules.arrow_hits(die, distance), "Frecce")
+			_apply_ranged_hits(attacker, defender, die, ZargosRules.arrow_hits(die, distance), "Frecce")
 		"Fiamme":
 			if distance > 5:
 				_show_event("Bersaglio oltre la gittata massima delle fiamme.")
 				attacker.acted = false
 				return
 			var in_forest := board_data.terrain_at(defender.hex) == ZargosRules.Terrain.FOREST
-			_apply_ranged_hits(defender, die, ZargosRules.fire_hits(die, distance, in_forest), "Fiamme")
+			_apply_ranged_hits(attacker, defender, die, ZargosRules.fire_hits(die, distance, in_forest), "Fiamme")
 		"Visione":
 			if distance > 5:
 				_show_event("Bersaglio oltre la gittata massima della visione.")
@@ -836,13 +881,13 @@ func _resolve_ranged_attack(attacker: CardboardUnit, defender: CardboardUnit, di
 			if retreat > 0:
 				_retreat_unit(defender, attacker, retreat)
 
-func _apply_ranged_hits(defender: CardboardUnit, die: int, hits: int, attack_name: String) -> void:
+func _apply_ranged_hits(attacker: CardboardUnit, defender: CardboardUnit, die: int, hits: int, attack_name: String) -> void:
 	defender.ranged_hits += hits
 	var required := maxi(1, defender.combat)
 	_show_event("%s • dado %d: %d colpi su %s (%d/%d)" % [attack_name, die, hits, defender.unit_type, defender.ranged_hits, required])
 	if defender.ranged_hits >= required:
 		_show_event(event_label.text + " • bersaglio eliminato")
-		_eliminate_unit(defender)
+		_eliminate_unit(defender, attacker)
 
 func _effective_combat(unit: CardboardUnit) -> int:
 	var strength := unit.combat
@@ -862,7 +907,7 @@ func _retreat_unit(unit: CardboardUnit, threat: CardboardUnit, distance: int) ->
 		options.sort_custom(func(a: Vector2i, b: Vector2i): return ZargosRules.hex_distance(a, threat.hex) > ZargosRules.hex_distance(b, threat.hex))
 		if options.is_empty() or ZargosRules.hex_distance(options[0], threat.hex) <= ZargosRules.hex_distance(current, threat.hex):
 			_show_event(event_label.text + " • Fuga bloccata: pedina eliminata")
-			_eliminate_unit(unit)
+			_eliminate_unit(unit, threat)
 			return
 		current = options[0]
 	unit.hex = current
@@ -873,10 +918,14 @@ func _retreat_unit(unit: CardboardUnit, threat: CardboardUnit, distance: int) ->
 		tween.parallel().tween_property(unit.guard_target, "position", hex_to_world(current) + Vector3(0, 0.17, 0), 0.28)
 		tween.parallel().tween_property(unit, "position", hex_to_world(current) + Vector3(0, 0.24, 0), 0.28)
 
-func _eliminate_unit(unit: CardboardUnit) -> void:
+func _eliminate_unit(unit: CardboardUnit, threat: CardboardUnit = null) -> void:
 	if selected == unit:
 		selected = null
+	var unguarded := unit.guard_target
 	_detach_escort(unit)
+	if unguarded and is_instance_valid(unguarded) and threat and is_instance_valid(threat):
+		_show_event(event_label.text + " • scorta eliminata: lo scortato fugge")
+		_retreat_unit(unguarded, threat, unguarded.movement)
 	var tween := create_tween()
 	tween.tween_property(unit, "scale", Vector3.ZERO, 0.22).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_IN)
 	tween.tween_callback(unit.queue_free)

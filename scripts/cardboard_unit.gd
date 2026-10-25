@@ -12,6 +12,7 @@ var acted := false
 var ranged_hits := 0
 var guard_target: CardboardUnit
 var guard_unit: CardboardUnit
+var escort_changed := false
 
 const COUNTER_TEXTURES := {
 	&"Cavalieri": {
@@ -92,4 +93,5 @@ func reset_turn() -> void:
 	moved = false
 	acted = false
 	ranged_hits = 0
+	escort_changed = false
 
