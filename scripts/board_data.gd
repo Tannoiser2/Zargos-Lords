@@ -102,6 +102,28 @@ func _init() -> void:
 	]
 	for hex in vortex_hexes:
 		terrain[_legacy_coordinate(_scan_coordinate(hex))] = ZargosRules.Terrain.MAGIC_VORTEX
+	_apply_bitmap_terrain_map()
+
+func _apply_bitmap_terrain_map() -> void:
+	var file := FileAccess.open("res://assets/data/terrain_map.json", FileAccess.READ)
+	if not file:
+		return
+	var parsed: Variant = JSON.parse_string(file.get_as_text())
+	if not parsed is Dictionary:
+		return
+	var terrain_types := {
+		"sea": ZargosRules.Terrain.SEA,
+		"forest": ZargosRules.Terrain.FOREST,
+		"mountain": ZargosRules.Terrain.MOUNTAIN,
+		"void": ZargosRules.Terrain.VOID,
+	}
+	for terrain_name: String in terrain_types:
+		for coordinates: Array in parsed.get(terrain_name, []):
+			var hex := Vector2i(int(coordinates[0]), int(coordinates[1]))
+			# I ponti di nuvole e i vortici verificati a mano hanno precedenza
+			# sulla classificazione cromatica della bitmap.
+			if terrain.get(hex) not in [ZargosRules.Terrain.CLOUD_BRIDGE, ZargosRules.Terrain.MAGIC_VORTEX]:
+				terrain[hex] = terrain_types[terrain_name]
 
 func _legacy_coordinate(old_hex: Vector2i) -> Vector2i:
 	# Migrazione provvisoria delle annotazioni della scansione 36x24 sulla
