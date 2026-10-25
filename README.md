@@ -13,7 +13,7 @@ Il repository contiene per ora il materiale di riferimento del gioco base:
 
 È disponibile un primo prototipo Godot 4.7 con:
 
-- tabellone tridimensionale con spessore e texture della mappa;
+- tabellone tridimensionale con spessore e scansione della mappa originale;
 - camera orbitale con rotazione, ingrandimento e spostamento;
 - pedine esagonali tridimensionali di tipo cartoncino;
 - quattro popoli con valori base di movimento e combattimento;

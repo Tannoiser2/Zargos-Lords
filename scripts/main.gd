@@ -1,6 +1,6 @@
 extends Node3D
 
-const BOARD_SIZE := Vector2(16.0, 10.738)
+const BOARD_SIZE := Vector2(16.0, 10.889)
 const HEX_RADIUS := 0.42
 
 var state := ZargosGameState.new()
@@ -57,7 +57,7 @@ func _build_board() -> void:
 	var box := BoxMesh.new()
 	box.size = Vector3(BOARD_SIZE.x, 0.22, BOARD_SIZE.y)
 	var material := StandardMaterial3D.new()
-	material.albedo_texture = load("res://assets/board/zargo_board.png")
+	material.albedo_texture = load("res://assets/board/zargo_board_original.jpg")
 	material.roughness = 0.78
 	box.material = material
 	mesh_instance.mesh = box
