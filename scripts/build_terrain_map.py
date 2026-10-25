@@ -27,6 +27,7 @@ def neighbours(col: int, row: int):
 
 
 raw: dict[tuple[int, int], str] = {}
+bridge_signal: dict[tuple[int, int], bool] = {}
 for row in range(ROWS):
     for col in range(COLS):
         x, y = centre(col, row)
@@ -45,6 +46,8 @@ for row in range(ROWS):
         forest = sum(g > r * 1.10 and g > b * .80 and g < 155 and r < 120 for r, g, b in pixels) / total
         red_rock = sum(r > g * 1.18 and r > b * 1.15 and 45 < r < 190 for r, g, b in pixels) / total
         grey_rock = sum(45 < r < 145 and abs(r - g) < 22 and abs(g - b) < 30 for r, g, b in pixels) / total
+        white = sum(min(rgb) > 185 and max(rgb) - min(rgb) < 30 for rgb in pixels) / total
+        sand = sum(r > 170 and g > 155 and r > b * 1.10 for r, g, b in pixels) / total
         brightness = sum(sum(rgb) / 3 for rgb in pixels) / total
         if dark > .42:
             raw[col, row] = "void"
@@ -56,6 +59,7 @@ for row in range(ROWS):
             raw[col, row] = "mountain"
         else:
             raw[col, row] = "plain"
+        bridge_signal[col, row] = raw[col, row] == "sea" and white > .065 and sand < .25
 
 # Artwork and vortices can satisfy a colour test in one isolated cell. Real
 # woods and mountain chains continue into at least one neighbouring hex.
@@ -63,7 +67,14 @@ for position, kind in list(raw.items()):
     if kind in ("forest", "mountain") and not any(raw.get(other) == kind for other in neighbours(*position)):
         raw[position] = "plain"
 
-result = {kind: [] for kind in ("sea", "forest", "mountain", "void")}
+# The white cloud bridges form short connected strokes over blue water. Requiring
+# a neighbouring signal discards isolated white coast highlights and lettering.
+for position, is_bridge in bridge_signal.items():
+    col, row = position
+    if 5 < col < 62 and 5 < row < 48 and is_bridge and any(bridge_signal.get(other, False) for other in neighbours(*position)):
+        raw[position] = "bridge"
+
+result = {kind: [] for kind in ("sea", "forest", "mountain", "void", "bridge")}
 for (col, row), kind in raw.items():
     if kind in result:
         result[kind].append([col, row])

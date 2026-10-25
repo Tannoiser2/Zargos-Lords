@@ -51,7 +51,7 @@ Il repository contiene per ora il materiale di riferimento del gioco base:
 - distanza, movimento, zone d'influenza, assedi e ritirate coerenti anche oltre bordo;
 - orientamento corretto delle annotazioni di boschi, montagne e gorghi magici sui quattro continenti;
 - reticolo di calibrazione attivabile con sovrapposizione cromatica dei terreni interpretati dal motore;
-- mappa terreno 67 × 52 ricavata dai centri di `Mappa 2.png`, con mare, boschi, montagne e vuoto cosmico; ponti di nuvole e vortici mantengono la verifica manuale prioritaria;
+- mappa terreno 67 × 52 ricavata dai centri di `Mappa 2.png`, con mare, boschi, montagne, ponti di nuvole e vuoto cosmico; i vortici mantengono la verifica manuale prioritaria;
 - pedine ritagliate nuovamente dalle quattro tavole originali, centrate e isolate dall'esagono adiacente;
 - ispettore esagono al passaggio del mouse con coordinate, continente, terreno, costi, difesa, schierabilità e occupante;
 - bonus difensivi del terreno applicati al combattimento;

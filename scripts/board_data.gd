@@ -111,18 +111,24 @@ func _apply_bitmap_terrain_map() -> void:
 	var parsed: Variant = JSON.parse_string(file.get_as_text())
 	if not parsed is Dictionary:
 		return
+	# Elimina la vecchia approssimazione 36x24 dei ponti: le coordinate nuove
+	# vengono lette direttamente dalla bitmap qui sotto.
+	for hex: Vector2i in terrain.keys():
+		if terrain[hex] == ZargosRules.Terrain.CLOUD_BRIDGE:
+			terrain[hex] = ZargosRules.Terrain.PLAIN
 	var terrain_types := {
 		"sea": ZargosRules.Terrain.SEA,
 		"forest": ZargosRules.Terrain.FOREST,
 		"mountain": ZargosRules.Terrain.MOUNTAIN,
 		"void": ZargosRules.Terrain.VOID,
+		"bridge": ZargosRules.Terrain.CLOUD_BRIDGE,
 	}
 	for terrain_name: String in terrain_types:
 		for coordinates: Array in parsed.get(terrain_name, []):
 			var hex := Vector2i(int(coordinates[0]), int(coordinates[1]))
-			# I ponti di nuvole e i vortici verificati a mano hanno precedenza
-			# sulla classificazione cromatica della bitmap.
-			if terrain.get(hex) not in [ZargosRules.Terrain.CLOUD_BRIDGE, ZargosRules.Terrain.MAGIC_VORTEX]:
+			# I vortici verificati a mano hanno precedenza sulla classificazione
+			# cromatica della bitmap.
+			if terrain.get(hex) != ZargosRules.Terrain.MAGIC_VORTEX:
 				terrain[hex] = terrain_types[terrain_name]
 
 func _legacy_coordinate(old_hex: Vector2i) -> Vector2i:
