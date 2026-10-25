@@ -21,9 +21,10 @@ Il repository contiene per ora il materiale di riferimento del gioco base:
 - sequenza Alleanze, Movimento e Combattimento;
 - ordine di turno Cavalieri, Draghi, Alati e Monaci;
 - calendario di 25 mesi;
-- primo risolutore di combattimento e test automatici delle regole.
+- tabelle originali complete per combattimento, frecce, fiamme e visioni;
+- test automatici delle regole e degli esempi del manuale.
 
-La trascrizione completa delle tabelle rotanti, i terreni definitivi, gli schieramenti, gli avversari IA e il multiplayer Firebase verranno aggiunti nelle fasi successive.
+I terreni definitivi, gli schieramenti, gli avversari IA e il multiplayer Firebase verranno aggiunti nelle fasi successive.
 
 ## Avvio
 
