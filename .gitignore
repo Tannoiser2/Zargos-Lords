@@ -10,7 +10,6 @@ zargos2-2.jpg
 # File generati da Godot
 .godot/
 export.cfg
-export_presets.cfg
 /*.jpg.import
 /*.png.import
 
@@ -19,5 +18,7 @@ export_presets.cfg
 .env.*
 firebase-debug.log
 tmp/
+build/
+
 
 

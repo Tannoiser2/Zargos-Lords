@@ -40,6 +40,10 @@ I terreni definitivi, gli schieramenti, gli avversari IA e il multiplayer Fireba
 
 Aprire `project.godot` con Godot 4.7 e avviare la scena principale.
 
+La prima versione Web è pubblicata tramite GitHub Pages all'indirizzo:
+
+https://tannoiser2.github.io/Zargos-Lords/
+
 ## Controlli
 
 - tasto destro e trascinamento: ruota il tabellone;
