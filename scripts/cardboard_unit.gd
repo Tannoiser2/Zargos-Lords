@@ -11,6 +11,33 @@ var moved := false
 var acted := false
 var ranged_hits := 0
 
+const COUNTER_TEXTURES := {
+	&"Cavalieri": {
+		&"Signore": preload("res://assets/units/cavalieri/signore.png"),
+		&"Mago": preload("res://assets/units/cavalieri/mago.png"),
+		&"Fantarcere": preload("res://assets/units/cavalieri/fantarcere.png"),
+		&"Fante": preload("res://assets/units/cavalieri/fante.png"),
+	},
+	&"Draghi": {
+		&"Signore": preload("res://assets/units/draghi/signore.png"),
+		&"Serpente": preload("res://assets/units/draghi/serpente.png"),
+		&"Lanciafiamme": preload("res://assets/units/draghi/lanciafiamme.png"),
+		&"Fante": preload("res://assets/units/draghi/fante.png"),
+	},
+	&"Alati": {
+		&"Signore": preload("res://assets/units/alati/signore.png"),
+		&"Falco": preload("res://assets/units/alati/falco.png"),
+		&"Fantarcere": preload("res://assets/units/alati/fantarcere.png"),
+		&"Fante": preload("res://assets/units/alati/fante.png"),
+	},
+	&"Monaci": {
+		&"Signore": preload("res://assets/units/monaci/signore.png"),
+		&"Illusionista": preload("res://assets/units/monaci/illusionista.png"),
+		&"Cavaliere": preload("res://assets/units/monaci/cavaliere.png"),
+		&"Fante": preload("res://assets/units/monaci/fante.png"),
+	},
+}
+
 func setup(p_faction: StringName, p_type: StringName, p_hex: Vector2i) -> void:
 	faction = p_faction
 	unit_type = p_type
@@ -25,9 +52,9 @@ func setup(p_faction: StringName, p_type: StringName, p_hex: Vector2i) -> void:
 func _build_mesh() -> void:
 	var mesh_instance := MeshInstance3D.new()
 	var cylinder := CylinderMesh.new()
-	cylinder.top_radius = 0.30
-	cylinder.bottom_radius = 0.30
-	cylinder.height = 0.075
+	cylinder.top_radius = 0.16
+	cylinder.bottom_radius = 0.16
+	cylinder.height = 0.055
 	cylinder.radial_segments = 6
 	var material := StandardMaterial3D.new()
 	material.albedo_color = ZargosRules.FACTION_COLORS[faction]
@@ -38,22 +65,23 @@ func _build_mesh() -> void:
 
 	var collision := CollisionShape3D.new()
 	var shape := CylinderShape3D.new()
-	shape.radius = 0.30
-	shape.height = 0.09
+	shape.radius = 0.16
+	shape.height = 0.065
 	collision.shape = shape
 	add_child(collision)
 
-	var label := Label3D.new()
-	label.text = "%s\n%d · %d" % [String(unit_type).left(4).to_upper(), movement, combat]
-	label.font_size = 34
-	label.modulate = Color("23180e")
-	label.outline_size = 3
-	label.outline_modulate = Color(1, 1, 1, 0.55)
-	label.position = Vector3(0, 0.044, 0)
-	label.rotation_degrees = Vector3(-90, 0, 0)
-	label.pixel_size = 0.0062
-	label.no_depth_test = false
-	add_child(label)
+	var face := MeshInstance3D.new()
+	var face_mesh := PlaneMesh.new()
+	face_mesh.size = Vector2(0.31, 0.31)
+	var face_material := StandardMaterial3D.new()
+	face_material.albedo_texture = COUNTER_TEXTURES[faction][unit_type]
+	face_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	face_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	face_material.cull_mode = BaseMaterial3D.CULL_DISABLED
+	face_mesh.material = face_material
+	face.mesh = face_mesh
+	face.position.y = 0.029
+	add_child(face)
 
 func set_selected(value: bool) -> void:
 	scale = Vector3.ONE * (1.18 if value else 1.0)

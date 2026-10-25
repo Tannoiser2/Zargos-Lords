@@ -1,7 +1,7 @@
 extends Node3D
 
 const BOARD_SIZE := Vector2(16.0, 10.889)
-const HEX_RADIUS := 0.42
+const HEX_RADIUS := 0.174
 
 var state := ZargosGameState.new()
 var board_data := ZargosBoardData.new()
@@ -18,8 +18,8 @@ var rng := RandomNumberGenerator.new()
 var orbiting := false
 var panning := false
 var orbit_yaw := 0.0
-var orbit_pitch := -0.82
-var camera_distance := 12.8
+var orbit_pitch := -1.18
+var camera_distance := 15.2
 var ai_enabled := false
 var ai_running := false
 
@@ -60,6 +60,7 @@ func _build_board() -> void:
 	box.size = Vector3(BOARD_SIZE.x, 0.22, BOARD_SIZE.y)
 	var material := StandardMaterial3D.new()
 	material.albedo_texture = load("res://assets/board/zargo_board_original.jpg")
+	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	material.roughness = 0.78
 	box.material = material
 	mesh_instance.mesh = box
@@ -102,6 +103,7 @@ func _build_hex_overlay() -> void:
 				mesh.surface_add_vertex(center + Vector3(cos(b) * HEX_RADIUS, 0, sin(b) * HEX_RADIUS))
 	mesh.surface_end()
 	grid_overlay.mesh = mesh
+	grid_overlay.visible = false
 	add_child(grid_overlay)
 
 func _build_camera() -> void:
@@ -181,11 +183,6 @@ func _build_ui() -> void:
 	reset_view.text = "Centra vista"
 	reset_view.pressed.connect(_reset_camera)
 	buttons.add_child(reset_view)
-	var grid_button := CheckButton.new()
-	grid_button.text = "Griglia"
-	grid_button.button_pressed = true
-	grid_button.toggled.connect(func(value: bool): grid_overlay.visible = value)
-	buttons.add_child(grid_button)
 	var ai_button := CheckButton.new()
 	ai_button.text = "IA avversari"
 	ai_button.toggled.connect(_on_ai_toggled)
@@ -209,8 +206,8 @@ func _build_ui() -> void:
 
 func _spawn_demo_armies() -> void:
 	var homes := {
-		&"Cavalieri": Vector2i(3, 3), &"Draghi": Vector2i(14, 3),
-		&"Alati": Vector2i(3, 8), &"Monaci": Vector2i(14, 8)
+		&"Cavalieri": Vector2i(13, 10), &"Draghi": Vector2i(39, 10),
+		&"Alati": Vector2i(13, 29), &"Monaci": Vector2i(39, 29)
 	}
 	for faction in ZargosRules.FACTIONS:
 		var base: Vector2i = homes[faction]
@@ -222,10 +219,10 @@ func _spawn_demo_armies() -> void:
 
 func _spawn_cities() -> void:
 	var locations := {
-		&"Cavalieri": [Vector2i(1, 1), Vector2i(3, 1), Vector2i(5, 1), Vector2i(1, 3), Vector2i(3, 5), Vector2i(5, 3)],
-		&"Draghi": [Vector2i(12, 1), Vector2i(14, 1), Vector2i(16, 1), Vector2i(12, 3), Vector2i(14, 5), Vector2i(16, 3)],
-		&"Alati": [Vector2i(1, 8), Vector2i(3, 10), Vector2i(5, 10), Vector2i(1, 10), Vector2i(3, 7), Vector2i(5, 8)],
-		&"Monaci": [Vector2i(12, 10), Vector2i(14, 10), Vector2i(16, 10), Vector2i(12, 8), Vector2i(14, 6), Vector2i(16, 8)],
+		&"Cavalieri": [Vector2i(8, 6), Vector2i(13, 6), Vector2i(18, 7), Vector2i(9, 12), Vector2i(14, 15), Vector2i(19, 12)],
+		&"Draghi": [Vector2i(33, 6), Vector2i(39, 6), Vector2i(45, 7), Vector2i(34, 12), Vector2i(39, 15), Vector2i(45, 12)],
+		&"Alati": [Vector2i(7, 27), Vector2i(12, 33), Vector2i(18, 34), Vector2i(8, 35), Vector2i(14, 26), Vector2i(20, 29)],
+		&"Monaci": [Vector2i(32, 34), Vector2i(38, 34), Vector2i(45, 32), Vector2i(33, 27), Vector2i(39, 24), Vector2i(45, 27)],
 	}
 	for faction in ZargosRules.FACTIONS:
 		for city_hex in locations[faction]:
@@ -579,7 +576,7 @@ func _reset_camera() -> void:
 	camera_rig.position = Vector3.ZERO
 	orbit_yaw = 0.0
 	orbit_pitch = -0.82
-	camera_distance = 12.8
+	camera_distance = 15.2
 	_update_camera()
 
 func _update_camera() -> void:

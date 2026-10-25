@@ -6,8 +6,10 @@ enum Terrain { PLAIN, FOREST, MOUNTAIN, SEA, CLOUD_BRIDGE, MAGIC_VORTEX, CITY }
 
 const FACTIONS := [&"Cavalieri", &"Draghi", &"Alati", &"Monaci"]
 const MONTH_LIMIT := 25
-const BOARD_COLUMNS := 18
-const BOARD_ROWS := 12
+# Reticolo della scansione originale. Non viene disegnato sopra la mappa: serve
+# soltanto a posare le pedine sui centri degli esagoni già stampati.
+const BOARD_COLUMNS := 52
+const BOARD_ROWS := 40
 
 const COMBAT_BANDS := [
 	Vector2i(-5, -2), Vector2i(-1, 0), Vector2i(1, 3), Vector2i(4, 7),
