@@ -50,7 +50,8 @@ Il repository contiene per ora il materiale di riferimento del gioco base:
 - cuciture planetarie dei bordi alfabetici, con passaggio verso i due esagoni corrispondenti;
 - distanza, movimento, zone d'influenza, assedi e ritirate coerenti anche oltre bordo;
 - orientamento corretto delle annotazioni di boschi, montagne e gorghi magici sui quattro continenti;
-- reticolo di calibrazione attivabile e lettura di coordinate e terreno facendo clic sulla mappa;
+- reticolo di calibrazione attivabile con sovrapposizione cromatica dei terreni interpretati dal motore;
+- ispettore esagono al passaggio del mouse con coordinate, continente, terreno, costi, difesa, schierabilità e occupante;
 - bonus difensivi del terreno applicati al combattimento;
 - determinazione del vincitore in base alle città controllate al 25º mese;
 - modalità solitaria con popolo umano selezionabile e avversari controllati dall'IA;
@@ -94,7 +95,7 @@ https://tannoiser2.github.io/Zargos-Lords/
 - clic sinistro: seleziona una pedina o una destinazione;
 - tasto sinistro e trascinamento: sposta liberamente il tabellone;
 - prima del mese 1, selezionare pedine o città e collocarle sui propri continenti, quindi premere Termina schieramento;
-- Reticolo esagoni o tasto G: mostra o nasconde in ciano la griglia del motore sopra gli esagoni originali; facendo clic su un esagono libero vengono mostrate coordinate e terreno;
+- Reticolo esagoni o tasto G: mostra o nasconde la griglia del motore e la classificazione cromatica dei terreni; passando il mouse su ciascun esagono vengono mostrati coordinate, continente, costi di movimento, difesa, schierabilità e occupante;
 - in combattimento, selezionare l'attaccante e poi una pedina nemica adiacente;
 - Esc: annulla la selezione.
 

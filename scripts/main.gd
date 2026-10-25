@@ -24,6 +24,9 @@ var unit_tray_title: Label
 var next_phase_button: Button
 var battle_button: Button
 var grid_overlay: MeshInstance3D
+var terrain_overlay: MeshInstance3D
+var inspection_marker: MeshInstance3D
+var inspected_hex := Vector2i(-1, -1)
 var movement_overlay: MeshInstance3D
 var rng := RandomNumberGenerator.new()
 var orbiting := false
@@ -160,6 +163,56 @@ func _build_hex_overlay() -> void:
 	grid_overlay.mesh = mesh
 	grid_overlay.visible = false
 	add_child(grid_overlay)
+
+	terrain_overlay = MeshInstance3D.new()
+	terrain_overlay.name = "TerrainInterpretationOverlay"
+	var terrain_mesh := ImmediateMesh.new()
+	var terrain_colors := {
+		ZargosRules.Terrain.PLAIN: Color(0.45, 0.90, 0.36, 0.07),
+		ZargosRules.Terrain.FOREST: Color(0.05, 0.55, 0.16, 0.34),
+		ZargosRules.Terrain.MOUNTAIN: Color(0.70, 0.23, 0.78, 0.34),
+		ZargosRules.Terrain.SEA: Color(0.05, 0.48, 0.95, 0.30),
+		ZargosRules.Terrain.CLOUD_BRIDGE: Color(0.94, 0.96, 1.0, 0.38),
+		ZargosRules.Terrain.MAGIC_VORTEX: Color(1.0, 0.18, 0.08, 0.42),
+		ZargosRules.Terrain.VOID: Color(0.05, 0.02, 0.08, 0.58),
+	}
+	for terrain_type in terrain_colors:
+		var terrain_material := StandardMaterial3D.new()
+		terrain_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		terrain_material.albedo_color = terrain_colors[terrain_type]
+		terrain_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		terrain_mesh.surface_begin(Mesh.PRIMITIVE_TRIANGLES, terrain_material)
+		for column in range(ZargosRules.BOARD_COLUMNS):
+			for row in range(ZargosRules.BOARD_ROWS):
+				var hex := Vector2i(column, row)
+				if board_data.terrain_at(hex) != terrain_type:
+					continue
+				var center := hex_to_world(hex) + Vector3(0, 0.124, 0)
+				for side in range(6):
+					var a := deg_to_rad(60.0 * side)
+					var b := deg_to_rad(60.0 * (side + 1))
+					terrain_mesh.surface_add_vertex(center)
+					terrain_mesh.surface_add_vertex(center + Vector3(cos(a) * HEX_RADIUS * 0.91, 0, sin(a) * HEX_RADIUS * 0.91))
+					terrain_mesh.surface_add_vertex(center + Vector3(cos(b) * HEX_RADIUS * 0.91, 0, sin(b) * HEX_RADIUS * 0.91))
+		terrain_mesh.surface_end()
+	terrain_overlay.mesh = terrain_mesh
+	terrain_overlay.visible = false
+	add_child(terrain_overlay)
+	inspection_marker = MeshInstance3D.new()
+	inspection_marker.name = "InspectedHexMarker"
+	var marker_mesh := CylinderMesh.new()
+	marker_mesh.top_radius = HEX_RADIUS * 0.82
+	marker_mesh.bottom_radius = HEX_RADIUS * 0.82
+	marker_mesh.height = 0.008
+	marker_mesh.radial_segments = 6
+	var marker_material := StandardMaterial3D.new()
+	marker_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	marker_material.albedo_color = Color(1.0, 0.86, 0.05, 0.48)
+	marker_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	marker_mesh.material = marker_material
+	inspection_marker.mesh = marker_mesh
+	inspection_marker.visible = false
+	add_child(inspection_marker)
 
 func _build_movement_overlay() -> void:
 	movement_overlay = MeshInstance3D.new()
@@ -925,6 +978,8 @@ func _unhandled_input(event: InputEvent) -> void:
 			if left_pressed and event.position.distance_to(left_press_position) > 6.0:
 				left_dragged = true
 			_pan_camera(event.relative)
+		elif grid_overlay.visible:
+			_inspect_hex_at(event.position)
 	if event is InputEventKey and event.pressed and not event.echo and event.physical_keycode == KEY_G:
 		grid_button.button_pressed = not grid_button.button_pressed
 	if event.is_action_pressed("cancel_action"):
@@ -941,7 +996,52 @@ func _pan_camera(relative: Vector2) -> void:
 
 func _set_grid_visible(enabled: bool) -> void:
 	grid_overlay.visible = enabled
-	_show_event("Reticolo motore %s: confronta le linee ciano con gli esagoni stampati." % ("attivo" if enabled else "disattivato"))
+	terrain_overlay.visible = enabled
+	inspection_marker.visible = false
+	inspected_hex = Vector2i(-1, -1)
+	if enabled:
+		score_label.text = _grid_legend_text()
+		_show_event("Passa il mouse su un esagono per leggere l'interpretazione completa del motore.")
+	else:
+		score_label.text = "Città: " + state.city_score()
+		_show_event("Reticolo e interpretazione dei terreni disattivati.")
+
+func _grid_legend_text() -> String:
+	return "LEGENDA • pianura: verde chiaro  • bosco: verde  • montagna: viola  • mare: blu  • ponte: bianco  • gorgo: rosso  • fuori mappa: nero"
+
+func _inspect_hex_at(screen_position: Vector2) -> void:
+	var origin := camera.project_ray_origin(screen_position)
+	var direction := camera.project_ray_normal(screen_position)
+	if absf(direction.y) < 0.0001:
+		return
+	var distance := (0.13 - origin.y) / direction.y
+	if distance < 0.0:
+		return
+	var point := origin + direction * distance
+	if absf(point.x) > BOARD_SIZE.x * 0.5 or absf(point.z) > BOARD_SIZE.y * 0.5:
+		return
+	var hex := world_to_hex(point)
+	if hex == inspected_hex:
+		return
+	inspected_hex = hex
+	inspection_marker.position = hex_to_world(hex) + Vector3(0, 0.139, 0)
+	inspection_marker.visible = true
+	var terrain_type := board_data.terrain_at(hex)
+	var ground_cost := ZargosRules.terrain_cost(terrain_type, false)
+	var flying_cost := ZargosRules.terrain_cost(terrain_type, true)
+	var occupancy := "libero"
+	var unit := _unit_at(hex)
+	var city := _city_at(hex)
+	if unit:
+		occupancy = "%s %s" % [unit.faction, unit.unit_type]
+	elif city:
+		occupancy = "Città dei %s" % city.faction
+	var ground_text := "vietato" if ground_cost < 0 else str(ground_cost)
+	var flying_text := "vietato" if flying_cost < 0 else str(flying_cost)
+	details_label.text = "ESA %02d,%02d • %s • continente %s • costo terra %s / volo %s • difesa +%d • %s • %s" % [
+		hex.x, hex.y, _terrain_name(terrain_type), board_data.continent_at(hex), ground_text, flying_text,
+		board_data.defense_bonus_at(hex), "schierabile" if board_data.is_deployment_hex(hex) else "non schierabile", occupancy,
+	]
 
 func _pick_at(screen_position: Vector2) -> void:
 	var origin := camera.project_ray_origin(screen_position)
@@ -1860,6 +1960,8 @@ func _refresh_ui() -> void:
 	score_label.text = "Città: " + state.city_score()
 	if online_mode and not online.room_code.is_empty():
 		score_label.text += "  •  Online %s" % online.room_code
+	if is_instance_valid(grid_overlay) and grid_overlay.visible:
+		score_label.text = _grid_legend_text()
 	if state.game_over:
 		_show_event("Fine della partita • Vincitori: %s" % ", ".join(state.winners()))
 	elif not deployment_mode and ai_enabled and _controller_for(state.active_faction()) == "ai" and not ai_running:

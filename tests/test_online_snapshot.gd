@@ -18,6 +18,7 @@ func _run() -> void:
 	assert(game.unit_tray.get_child(0).icon != null)
 	game._set_grid_visible(true)
 	assert(game.grid_overlay.visible)
+	assert(game.terrain_overlay.visible)
 	var old_camera_position: Vector3 = game.camera_rig.position
 	game._pan_camera(Vector2(40, 25))
 	assert(game.camera_rig.position != old_camera_position)
