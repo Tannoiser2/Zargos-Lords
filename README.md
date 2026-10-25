@@ -48,9 +48,21 @@ Il repository contiene per ora il materiale di riferimento del gioco base:
 - bonus difensivi del terreno applicati al combattimento;
 - determinazione del vincitore in base alle città controllate al 25º mese;
 - modalità solitaria con popolo umano selezionabile e avversari controllati dall'IA;
+- infrastruttura Firebase REST per autenticazione anonima, stanze a codice e sincronizzazione degli snapshot;
 - test automatici delle regole e degli esempi del manuale.
 
-La verifica manuale finale delle coste e il multiplayer Firebase verranno aggiunti nelle fasi successive.
+La verifica manuale finale delle coste e il collegamento della lobby Firebase all'interfaccia verranno aggiunti nelle fasi successive.
+
+## Configurazione Firebase
+
+Il client usa le API REST ufficiali e non richiede un SDK Godot. Nel progetto Firebase occorre:
+
+- attivare l'accesso anonimo in Authentication;
+- creare un Realtime Database;
+- applicare le regole contenute in `firebase.database.rules.json`;
+- fornire al client il Database URL HTTPS e la Web API key dalla configurazione dell'app Web.
+
+La Web API key identifica il progetto ma non sostituisce le regole di sicurezza: ogni richiesta al database viene autenticata con un token anonimo. Nessuna configurazione di un progetto Firebase reale viene salvata nel repository.
 
 ## Avvio
 

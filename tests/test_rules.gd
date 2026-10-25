@@ -1,6 +1,9 @@
 extends SceneTree
 
 func _init() -> void:
+	assert(FirebaseOnline.normalize_room_code(" za-rgo.24 ") == "ZARG24")
+	assert(FirebaseOnline.normalize_room_code("oi01") == "")
+	assert(FirebaseOnline.normalize_room_code("abcdefghijk") == "ABCDEFGH")
 	assert(ZargosRules.hex_distance(Vector2i(0, 0), Vector2i(0, 0)) == 0)
 	assert(ZargosRules.hex_distance(Vector2i(3, 3), Vector2i(4, 3)) == 1)
 	assert(ZargosRules.terrain_cost(ZargosRules.Terrain.FOREST) == 2)
