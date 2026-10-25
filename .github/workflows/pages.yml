@@ -34,15 +34,16 @@ jobs:
           /tmp/godot-bin/Godot_v4.7-stable_linux.x86_64 --headless --path . --script res://tests/test_rules.gd
           /tmp/godot-bin/Godot_v4.7-stable_linux.x86_64 --headless --path . --script res://tests/test_online_snapshot.gd
       - name: Configura Firebase per la build pubblica
-        if: ${{ secrets.FIREBASE_DATABASE_URL != '' && secrets.FIREBASE_WEB_API_KEY != '' }}
         env:
           FIREBASE_DATABASE_URL: ${{ secrets.FIREBASE_DATABASE_URL }}
           FIREBASE_WEB_API_KEY: ${{ secrets.FIREBASE_WEB_API_KEY }}
         run: |
-          jq -n \
-            --arg database_url "$FIREBASE_DATABASE_URL" \
-            --arg api_key "$FIREBASE_WEB_API_KEY" \
-            '{database_url: $database_url, api_key: $api_key}' > firebase_config.json
+          if [[ -n "$FIREBASE_DATABASE_URL" && -n "$FIREBASE_WEB_API_KEY" ]]; then
+            jq -n \
+              --arg database_url "$FIREBASE_DATABASE_URL" \
+              --arg api_key "$FIREBASE_WEB_API_KEY" \
+              '{database_url: $database_url, api_key: $api_key}' > firebase_config.json
+          fi
       - name: Esporta la build Web
         run: |
           mkdir -p build/web
