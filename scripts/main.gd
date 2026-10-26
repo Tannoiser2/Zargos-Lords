@@ -238,6 +238,7 @@ func _effetto(e: Dictionary) -> void:
 			_deseleziona(false)
 			if _mio(e.p):
 				_inquadra_popolo(e.p)
+				hud.mostra_dado(0, "MOSSA %s" % ZRegole.degli(e.p).to_upper(), "Mese %d dell'Anno di Zargo. Tocca a te." % int(e.mese))
 		"fine":
 			_fine_partita()
 
@@ -333,7 +334,7 @@ func _clic(h: Vector2i, shift: bool) -> void:
 			citta_sel = int(ci.id) if not ci.is_empty() and u == null else -1
 			_aggiorna()
 		ZPartita.FASE_MOVIMENTO:
-			_clic_movimento(h, u, ci)
+			_clic_movimento(h, u, ci, shift)
 		ZPartita.FASE_COMBATTIMENTO:
 			_clic_combattimento(h, u, ci, shift)
 
@@ -374,7 +375,7 @@ func _prossima_citta_da_piazzare() -> int:
 			return int(ci.id)
 	return -1
 
-func _clic_movimento(h: Vector2i, u: ZPedina, ci: Dictionary) -> void:
+func _clic_movimento(h: Vector2i, u: ZPedina, ci: Dictionary, shift := false) -> void:
 	var p := partita.popolo_di_mano()
 	var s: ZPedina = partita.pedine[sel_id] if sel_id >= 0 else null
 	if s and s.popolo == p:
@@ -393,7 +394,7 @@ func _clic_movimento(h: Vector2i, u: ZPedina, ci: Dictionary) -> void:
 				_applica({"a": "tiro", "u": s.id, "b": u.id})
 				return
 		var rag := partita.raggiungibili(s)
-		if rag.has(h) and (u == null or u.popolo == p) and partita.puo_muovere(s) == "":
+		if rag.has(h) and (u == null or (u.popolo == p and shift)) and partita.puo_muovere(s) == "":
 			_applica({"a": "muovi", "u": s.id, "h": [h.x, h.y]})
 			if partita.pedine[s.id].residuo <= 0:
 				sel_id = -1
@@ -967,7 +968,7 @@ func _aggiorna_suggerimento() -> void:
 				if partita.singoli_aperti:
 					t = "Prima gli attacchi singoli (Alati, Falchi, Serpenti: seleziona e clicca un nemico in rosso), poi muovi gli altri pezzi."
 				else:
-					t = "Seleziona un pezzo e clicca un esagono evidenziato. Entrando nella zona d'influenza nemica ci si ferma."
+					t = "Seleziona un pezzo e clicca un esagono evidenziato; Maiusc+clic con un fante su un pezzo amico per fargli da scorta."
 				if sel_id >= 0 and partita.pedine[sel_id].scomparso:
 					t = "Scegli dove far ricomparire il Signore Monaco."
 			ZPartita.FASE_COMBATTIMENTO:

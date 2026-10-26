@@ -124,10 +124,15 @@ class Icona extends Button:
 		match tipo:
 			"sx", "dx":
 				var verso := -1.0 if tipo == "sx" else 1.0
-				draw_arc(c, 8.5, deg_to_rad(-200 if tipo == "sx" else 20), deg_to_rad(20 if tipo == "sx" else 200), 18, col, w, true)
-				var p := c + Vector2(8.5 * verso, 3)
-				draw_line(p, p + Vector2(-4 * verso, -1), col, w, true)
-				draw_line(p, p + Vector2(1 * verso, -5), col, w, true)
+				var pts := PackedVector2Array()
+				for i in 19:
+					var ang := deg_to_rad(-40.0 + i * 15.0)
+					pts.append(c + Vector2(cos(ang) * verso, sin(ang)) * 8.5)
+				draw_polyline(pts, col, w, true)
+				var fine := pts[pts.size() - 1]
+				var tang := (fine - pts[pts.size() - 2]).normalized()
+				var norm := Vector2(-tang.y, tang.x)
+				draw_colored_polygon(PackedVector2Array([fine + tang * 4.5, fine - tang * 1.5 + norm * 4.0, fine - tang * 1.5 - norm * 4.0]), col)
 			"griglia":
 				var pts := PackedVector2Array()
 				for i in 7:

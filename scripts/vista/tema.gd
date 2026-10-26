@@ -25,7 +25,7 @@ static func _jost(peso: int) -> Font:
 	var base: FontFile = load("res://assets/fonts/Jost.ttf")
 	var v := FontVariation.new()
 	v.base_font = base
-	v.variation_opentype = {"wght": peso}
+	v.variation_opentype = {TextServerManager.get_primary_interface().name_to_tag("wght"): peso}
 	return v
 
 static func riquadro(fondo: Color, bordo: Color = CUOIO_SCURO, spessore := 2, raggio := 6, margine := 10) -> StyleBoxFlat:
