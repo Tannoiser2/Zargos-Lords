@@ -196,10 +196,10 @@ func _build_hex_overlay() -> void:
 func _rebuild_terrain_overlay() -> void:
 	var terrain_mesh := ImmediateMesh.new()
 	var terrain_colors := {
-		ZargosRules.Terrain.PLAIN: Color(0.45, 0.90, 0.36, 0.07),
-		ZargosRules.Terrain.FOREST: Color(0.05, 0.55, 0.16, 0.34),
-		ZargosRules.Terrain.MOUNTAIN: Color(0.70, 0.23, 0.78, 0.34),
-		ZargosRules.Terrain.SEA: Color(0.05, 0.48, 0.95, 0.30),
+		ZargosRules.Terrain.PLAIN: Color(0.45, 0.90, 0.36, 0.18),
+		ZargosRules.Terrain.FOREST: Color(0.05, 0.55, 0.16, 0.42),
+		ZargosRules.Terrain.MOUNTAIN: Color(0.70, 0.23, 0.78, 0.42),
+		ZargosRules.Terrain.SEA: Color(0.05, 0.48, 0.95, 0.38),
 		ZargosRules.Terrain.CLOUD_BRIDGE: Color(0.94, 0.96, 1.0, 0.38),
 		ZargosRules.Terrain.MAGIC_VORTEX: Color(1.0, 0.18, 0.08, 0.42),
 		ZargosRules.Terrain.VOID: Color(0.05, 0.02, 0.08, 0.58),
@@ -816,14 +816,22 @@ func _spawn_armies(territory_owners: Dictionary) -> void:
 		&"Cavalieri": Vector2i(9, 6), &"Draghi": Vector2i(27, 6),
 		&"Alati": Vector2i(9, 17), &"Monaci": Vector2i(27, 17)
 	}
+	var spawned_factions: Array[StringName] = []
 	for territory: StringName in territory_owners:
 		var faction: StringName = territory_owners[territory]
+		if faction in spawned_factions:
+			continue
+		spawned_factions.append(faction)
 		var base: Vector2i = _legacy_hex(homes[territory])
 		var index := 0
 		for unit_type in ZargosRules.UNIT_TYPES[faction].keys():
-			var offset := Vector2i(index % 2, index / 2)
-			_spawn_unit(faction, unit_type, base + offset)
-			index += 1
+			var quantity: int = ZargosRules.UNIT_COUNTS[faction][unit_type]
+			for copy in range(quantity):
+				# Le armate partono impilate in una piccola zona di raccolta. Ogni
+				# copia resta selezionabile individualmente dal vassoio inferiore.
+				var offset := Vector2i(index % 4, (index / 4) % 4)
+				_spawn_unit(faction, unit_type, base + offset)
+				index += 1
 
 func _spawn_cities(territory_owners: Dictionary) -> void:
 	var locations := {
@@ -1074,8 +1082,8 @@ func _inspect_hex_at(screen_position: Vector2) -> void:
 		occupancy = "Città dei %s" % city.faction
 	var ground_text := "vietato" if ground_cost < 0 else str(ground_cost)
 	var flying_text := "vietato" if flying_cost < 0 else str(flying_cost)
-	details_label.text = "ESA %02d,%02d • %s • continente %s • costo terra %s / volo %s • difesa +%d • %s • %s" % [
-		hex.x, hex.y, _terrain_name(terrain_type), board_data.continent_at(hex), ground_text, flying_text,
+	details_label.text = "ESA %02d,%02d • %s [%s] • continente %s • costo terra %s / volo %s • difesa +%d • %s • %s" % [
+		hex.x, hex.y, _terrain_name(terrain_type), board_data.recognition_label(hex), board_data.continent_at(hex), ground_text, flying_text,
 		board_data.defense_bonus_at(hex), "schierabile" if board_data.is_deployment_hex(hex) else "non schierabile", occupancy,
 	]
 
@@ -1202,6 +1210,8 @@ func _rebuild_unit_tray() -> void:
 	var tray_units: Array[CardboardUnit] = []
 	for faction in shown_factions:
 		tray_units.append_array(_units_for_faction(faction))
+	unit_tray_title.text += " • %d PEDINE" % tray_units.size()
+	var type_indices := {}
 	for unit in tray_units:
 		if unit.vanished or not unit.visible:
 			continue
@@ -1210,7 +1220,10 @@ func _rebuild_unit_tray() -> void:
 		button.icon = CardboardUnit.COUNTER_TEXTURES[unit.faction][unit.unit_type]
 		button.expand_icon = true
 		button.add_theme_constant_override("icon_max_width", 58)
-		button.tooltip_text = "%s • Movimento %d • Combattimento %d%s" % [unit.unit_type, unit.movement, unit.combat, " • " + unit.ability if unit.ability else ""]
+		var type_key := "%s/%s" % [unit.faction, unit.unit_type]
+		type_indices[type_key] = int(type_indices.get(type_key, 0)) + 1
+		var type_total: int = ZargosRules.UNIT_COUNTS[unit.faction][unit.unit_type]
+		button.tooltip_text = "%s %d/%d • Movimento %d • Combattimento %d%s" % [unit.unit_type, type_indices[type_key], type_total, unit.movement, unit.combat, " • " + unit.ability if unit.ability else ""]
 		button.toggle_mode = true
 		button.button_pressed = unit == selected or unit in combat_group
 		var unavailable := _controller_for(unit.faction) != "human"
@@ -2052,16 +2065,18 @@ func _run_ai_turn() -> void:
 	await get_tree().create_timer(0.35).timeout
 	if state.phase == ZargosRules.Phase.ALLIANCES:
 		state.advance_phase()
+	var moved_units := 0
 	for unit in _units_for_faction(faction):
 		var destination := _best_ai_destination(unit)
 		if destination != unit.hex:
 			var origin := unit.hex
 			unit.hex = destination
 			_register_facing_and_charge(unit, origin, destination)
-			var tween := create_tween()
-			tween.tween_property(unit, "position", hex_to_world(destination) + Vector3(0, 0.18, 0), 0.18)
+			unit.position = hex_to_world(destination) + Vector3(0, 0.18, 0)
 			unit.moved = true
-			await tween.finished
+			moved_units += 1
+			if moved_units % 8 == 0:
+				await get_tree().process_frame
 	state.advance_phase()
 	for unit in _units_for_faction(faction):
 		if not is_instance_valid(unit) or unit.acted:
@@ -2101,27 +2116,26 @@ func _best_ai_destination(unit: CardboardUnit) -> Vector2i:
 	var best_hex := unit.hex
 	var best_distance := 9999
 	var flying := unit.ability == "Volo"
-	for column in range(ZargosRules.BOARD_COLUMNS):
-		for row in range(ZargosRules.BOARD_ROWS):
-			var candidate := Vector2i(column, row)
-			if candidate != unit.hex and _unit_at(candidate):
-				continue
-			var cost := board_data.find_movement_cost(
-				unit.hex,
-				candidate,
-				unit.movement,
-				flying,
-				func(hex: Vector2i): return _movement_blocked(hex, unit.faction, flying),
-				func(hex: Vector2i): return _in_enemy_zone_of_influence(hex, unit.faction) and not flying
-			)
-			if cost < 0:
-				continue
-			var nearest := 9999
-			for target_hex in targets:
-				nearest = mini(nearest, _map_distance(candidate, target_hex))
-			if nearest < best_distance:
-				best_distance = nearest
-				best_hex = candidate
+	# Una sola espansione del percorso per pedina. Prima veniva ripetuta per
+	# tutti i 3484 esagoni, congelando soprattutto la build Web.
+	var reachable := board_data.reachable_hexes(
+		unit.hex,
+		unit.movement,
+		flying,
+		func(hex: Vector2i): return _movement_blocked(hex, unit.faction, flying),
+		func(hex: Vector2i): return _in_enemy_zone_of_influence(hex, unit.faction) and not flying
+	)
+	for candidate: Vector2i in reachable:
+		if candidate != unit.hex and _unit_at(candidate):
+			continue
+		var nearest := 9999
+		for target_hex in targets:
+			# Euristica locale O(1): il percorso planetario completo viene usato
+			# solo dalle regole, non migliaia di volte durante la pianificazione.
+			nearest = mini(nearest, ZargosRules.hex_distance(candidate, target_hex))
+		if nearest < best_distance:
+			best_distance = nearest
+			best_hex = candidate
 	return best_hex
 
 func _best_ai_target(unit: CardboardUnit) -> CardboardUnit:
@@ -2131,7 +2145,7 @@ func _best_ai_target(unit: CardboardUnit) -> CardboardUnit:
 	var best: CardboardUnit = null
 	var best_distance := 9999
 	for enemy in _enemy_units(unit.faction):
-		var distance := _map_distance(unit.hex, enemy.hex)
+		var distance := ZargosRules.hex_distance(unit.hex, enemy.hex)
 		if unit.ability == "Tiro" and not _arrow_line_result(unit, enemy).clear:
 			continue
 		if distance <= max_range and distance < best_distance:

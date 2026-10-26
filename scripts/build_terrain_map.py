@@ -74,7 +74,7 @@ for position, is_bridge in bridge_signal.items():
     if 5 < col < 62 and 5 < row < 48 and is_bridge and any(bridge_signal.get(other, False) for other in neighbours(*position)):
         raw[position] = "bridge"
 
-result = {kind: [] for kind in ("sea", "forest", "mountain", "void", "bridge")}
+result = {kind: [] for kind in ("plain", "sea", "forest", "mountain", "void", "bridge")}
 for (col, row), kind in raw.items():
     if kind in result:
         result[kind].append([col, row])

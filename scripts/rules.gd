@@ -88,6 +88,15 @@ const UNIT_TYPES := {
 	},
 }
 
+# Quantità delle armate ricavate dai quattro fogli di pedine originali.
+# I segnalini di sparizione dei Monaci non sono unità combattenti.
+const UNIT_COUNTS := {
+	&"Cavalieri": {&"Signore": 9, &"Mago": 3, &"Fantarcere": 8, &"Fante": 28},
+	&"Draghi": {&"Signore": 8, &"Serpente": 8, &"Lanciafiamme": 10, &"Fante": 28},
+	&"Alati": {&"Signore": 7, &"Falco": 12, &"Fantarcere": 10, &"Fante": 24},
+	&"Monaci": {&"Signore": 8, &"Illusionista": 6, &"Cavaliere": 12, &"Fante": 24},
+}
+
 static func terrain_cost(terrain: Terrain, flying: bool = false) -> int:
 	if terrain in [Terrain.SEA, Terrain.VOID]:
 		return -1

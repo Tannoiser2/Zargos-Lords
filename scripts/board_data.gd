@@ -2,6 +2,7 @@ class_name ZargosBoardData
 extends RefCounted
 
 var terrain: Dictionary = {}
+var terrain_recognition: Dictionary = {}
 var distance_cache: Dictionary = {}
 
 func _init() -> void:
@@ -118,6 +119,7 @@ func _apply_bitmap_terrain_map() -> void:
 		if terrain[hex] == ZargosRules.Terrain.CLOUD_BRIDGE:
 			terrain[hex] = ZargosRules.Terrain.PLAIN
 	var terrain_types := {
+		"plain": ZargosRules.Terrain.PLAIN,
 		"sea": ZargosRules.Terrain.SEA,
 		"forest": ZargosRules.Terrain.FOREST,
 		"mountain": ZargosRules.Terrain.MOUNTAIN,
@@ -127,10 +129,16 @@ func _apply_bitmap_terrain_map() -> void:
 	for terrain_name: String in terrain_types:
 		for coordinates: Array in parsed.get(terrain_name, []):
 			var hex := Vector2i(int(coordinates[0]), int(coordinates[1]))
+			# Le annotazioni verificate a mano prevalgono su un risultato
+			# cromatico generico di pianura.
+			if terrain_name == "plain" and terrain.has(hex):
+				terrain_recognition[hex] = "verified"
+				continue
 			# I vortici verificati a mano hanno precedenza sulla classificazione
 			# cromatica della bitmap.
 			if terrain.get(hex) != ZargosRules.Terrain.MAGIC_VORTEX:
 				terrain[hex] = terrain_types[terrain_name]
+			terrain_recognition[hex] = "automatic"
 
 func _legacy_coordinate(old_hex: Vector2i) -> Vector2i:
 	# Migrazione provvisoria delle annotazioni della scansione 36x24 sulla
@@ -171,6 +179,7 @@ func set_terrain(hex: Vector2i, terrain_type: ZargosRules.Terrain) -> void:
 
 func set_terrain_override(hex: Vector2i, terrain_type: ZargosRules.Terrain) -> void:
 	set_terrain(hex, terrain_type)
+	terrain_recognition[hex] = "manual"
 	var overrides := _read_user_overrides()
 	overrides["%d,%d" % [hex.x, hex.y]] = int(terrain_type)
 	_write_user_overrides(overrides)
@@ -183,7 +192,16 @@ func _load_user_terrain_overrides() -> void:
 	for key: String in overrides:
 		var parts := key.split(",")
 		if parts.size() == 2:
-			terrain[Vector2i(int(parts[0]), int(parts[1]))] = int(overrides[key]) as ZargosRules.Terrain
+			var hex := Vector2i(int(parts[0]), int(parts[1]))
+			terrain[hex] = int(overrides[key]) as ZargosRules.Terrain
+			terrain_recognition[hex] = "manual"
+
+func recognition_label(hex: Vector2i) -> String:
+	match String(terrain_recognition.get(hex, "unclassified")):
+		"automatic": return "riconosciuto dalla mappa"
+		"verified": return "verificato sulla tavola"
+		"manual": return "corretto manualmente"
+		_: return "non classificato"
 
 func _read_user_overrides() -> Dictionary:
 	var file := FileAccess.open("user://terrain_overrides.json", FileAccess.READ)

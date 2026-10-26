@@ -2,7 +2,7 @@
 """Rebuild the playable counter faces from the four original counter sheets."""
 
 from pathlib import Path
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageFilter
 
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -38,10 +38,12 @@ def extract(source: Image.Image, centre: tuple[int, int]) -> Image.Image:
     cx, cy = centre
     crop = source.crop((cx - 62, cy - 49, cx + 62, cy + 49)).convert("RGBA")
     mask = Image.new("L", crop.size, 0)
-    # Flat-top hexagon; stay just outside the original outline so no edge is lost.
-    ImageDraw.Draw(mask).polygon([(30, 1), (94, 1), (123, 49), (94, 97), (30, 97), (0, 49)], fill=255)
+    # Un piccolo margine interno elimina i frammenti delle pedine adiacenti
+    # presenti nelle scansioni a nido d'ape senza tagliare l'illustrazione.
+    ImageDraw.Draw(mask).polygon([(33, 4), (91, 4), (119, 49), (91, 94), (33, 94), (5, 49)], fill=255)
     crop.putalpha(mask)
     crop.thumbnail((246, 220), Image.Resampling.LANCZOS)
+    crop = crop.filter(ImageFilter.UnsharpMask(radius=1.2, percent=135, threshold=3))
     result = Image.new("RGBA", (SIZE, SIZE), (0, 0, 0, 0))
     result.alpha_composite(crop, ((SIZE - crop.width) // 2, (SIZE - crop.height) // 2))
     return result
