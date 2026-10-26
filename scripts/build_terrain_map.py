@@ -10,9 +10,9 @@ from PIL import Image
 ROOT = Path(__file__).resolve().parent.parent
 IMAGE = Image.open(ROOT / "Mappa 2.png").convert("RGB")
 COLS, ROWS = 67, 52
-RADIUS = 35.5645
+RADIUS = 35.38944
 DX, DY = math.sqrt(3.0) * RADIUS, 1.5 * RADIUS
-ORIGIN_X, ORIGIN_Y = 24.6, -13.59
+ORIGIN_X, ORIGIN_Y = 55.25916, -5.69
 
 
 def centre(col: int, row: int) -> tuple[float, float]:

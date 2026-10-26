@@ -3,8 +3,11 @@ extends Node3D
 const BOARD_SIZE := Vector2(16.0, 10.73828125)
 ## Calibrated directly against the white lattice printed on Mappa 2.png.
 ## The board texture is mapped at exactly 256 pixels per world unit.
-const HEX_RADIUS := 0.1389238
-const GRID_ORIGIN := Vector2(-7.9039063, -5.422214)
+# The TTS module uses a 1.296-wide pointy hex (radius 0.648) on a
+# 75-unit-wide board.  Converted to this board's 16-unit scale, these values
+# keep the engine lattice on the grid printed into Mappa 2.png at every edge.
+const HEX_RADIUS := 0.13824
+const GRID_ORIGIN := Vector2(-7.7841439, -5.39136)
 
 var state := ZargosGameState.new()
 var board_data := ZargosBoardData.new()
