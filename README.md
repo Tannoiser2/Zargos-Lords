@@ -1,111 +1,100 @@
 # Zargo's Lords
 
-Progetto per la realizzazione di una versione digitale in Godot del wargame fantasy vintage *Zargo's Lords*.
+Versione digitale in Godot 4.7 del wargame fantasy *Zargo's Lords* (International Team), con il gioco base: Cavalieri, Draghi, Alati e Monaci.
 
-## Stato del progetto
+Si gioca da 2 a 4 popoli. Ognuno può essere guidato da un giocatore allo stesso computer, dall'intelligenza artificiale oppure, online, da un giocatore remoto.
 
-Il repository contiene per ora il materiale di riferimento del gioco base:
+Pubblicazione: https://tannoiser2.github.io/Zargos-Lords/
 
-- regolamento italiano in formato Word;
-- scansione della mappa;
-- fogli delle pedine dei quattro popoli originali;
-- tabelle, copertine e illustrazioni di riferimento.
+## Cosa c'è
 
-È disponibile un primo prototipo Godot 4.7 con:
+- **Regole complete del gioco base**, trascritte dal regolamento italiano e dalle ruote originali:
+  - schieramento con città a distanza minima di 4 esagoni e mai sulla costa, guarnigioni coperte fino a 4 pezzi;
+  - sequenza alleanze → movimento → tiri e scontri, con ordine di mossa fisso e calendario di 25 mesi;
+  - movimento con boschi (2 punti), montagne (un'intera mossa per salire), gorghi magici (paralisi per tre mosse e inattaccabilità), ponti di nuvole e cuciture planetarie dei bordi;
+  - zone d'influenza;
+  - attacchi combinati, o di un solo pezzo contro più nemici;
+  - ritirate in linea retta con eliminazione contro gli ostacoli e spinta dei pezzi amici;
+  - poteri dei pezzi:
+    - carica dei Signori Cavalieri (+3 frontale, +1 laterale);
+    - bonus dei Maghi;
+    - visioni di Maghi e Illusionisti;
+    - frecce dei Fantarcieri in linea retta, con i colpi che si sommano;
+    - fiamme di Draghi e Lanciafiamme (i Draghi ne sono immuni);
+    - attacchi singoli di Alati, Falchi e Serpenti, con la carica travolgente del Serpente;
+    - volo degli Alati;
+    - sparizione dei Signori Monaci;
+  - scorte dei fanti;
+  - assedi;
+  - alleanze libere e tradibili;
+  - vittoria per numero di città.
+- **Tabelle verificate sulle fotografie delle ruote** (`docs/original/wheels`): combattimento, frecce, fiamme, visioni, e il numero di frecce o vampe necessario per eliminare ogni pezzo, stampato sul retro delle ruote.
+- **Mappa logica ricostruita esagono per esagono** dalla mappa del modulo Tabletop Simulator (`assets/board/mappa.png`), in `assets/data/board.json`:
+  - reticolo 66 × 53;
+  - pianure, boschi, montagne, 18 gorghi;
+  - mare, ponti di nuvole e vuoto cosmico;
+  - quattro continenti;
+  - collegamenti dei bordi.
+- **Interfaccia nello stile dei materiali originali**:
+  - palette cuoio e avorio delle ruote;
+  - titoli in un bastone condensato come il logo della scatola (Anton), testi in un geometrico alla Futura come le ruote (Jost);
+  - calendario a 25 cerchi con i mesi barrati;
+  - anteprima di ogni scontro come uno "spicchio" della ruota dei combattimenti, con l'esito per ciascuna faccia del dado.
+- **Tavolo 3D**:
+  - pedine di cartone esagonali con le illustrazioni originali, rigenerate in alta risoluzione da `tools/genera_pedine.py`;
+  - evidenziazione dei movimenti e dei bersagli;
+  - animazioni di frecce, fiamme e visioni;
+  - telecamera orbitale.
+- **Intelligenza artificiale**: diplomazia, attacchi singoli, movimento verso le città nemiche, tiri, assedi e scontri valutati sulle probabilità della ruota.
+- **Partita online** tramite Firebase (autenticazione anonima e Realtime Database), con posti assegnati per popolo.
+- **Salvataggio automatico** della partita locale dopo ogni azione.
 
-- tabellone tridimensionale con spessore e mappa ad alta risoluzione `Mappa 2.png` del modulo Tabletop Simulator;
-- camera orbitale con rotazione, ingrandimento e spostamento;
-- pedine esagonali tridimensionali di tipo cartoncino;
-- quattro popoli con valori base di movimento e combattimento;
-- selezione e movimento sul reticolo della scansione originale;
-- evidenziazione delle destinazioni raggiungibili e zone d'influenza nemiche;
-- preparazione della partita con scelta di 2, 3 o 4 popoli e del popolo umano;
-- menu illustrato con copertina e pedine originali, ispirato alla grafica International Team;
-- interfaccia in partita a cornice, senza finestre flottanti sulla mappa, con plancia illustrata delle pedine disponibili;
-- selezione e inquadratura delle unità tramite i pulsanti con la grafica originale delle pedine;
-- controllo indipendente Umano, IA o Esclusa per ciascuno dei quattro popoli;
-- modalità osservatore con quattro IA che disputano autonomamente la partita;
-- pannello dedicato a *Zargo's Lords 2*, con Amazzoni e Arachnidi predisposte per la futura espansione;
-- assegnazione di due continenti per popolo nelle partite a due;
-- schieramento iniziale interattivo di pedine e città sui continenti assegnati;
-- sequenza Alleanze, Movimento e Combattimento;
-- ordine di turno Cavalieri, Draghi, Alati e Monaci;
-- calendario di 25 mesi;
-- tabelle originali complete per combattimento, frecce, fiamme e visioni;
-- risoluzione di eliminazioni e arretramenti, inclusa la fuga bloccata;
-- attacchi normali combinati con più pedine e ritirata dell'intero gruppo;
-- formazione e separazione delle scorte, arretramento congiunto e fuga dello scortato se il fante viene eliminato;
-- sparizione dei Signori Monaci e ricomparsa nella mossa successiva con vincoli di mare e gorghi;
-- carica rettilinea dei Signori Cavalieri con bonus frontale e laterale;
-- linea di tiro rettilinea dei Fantarcieri con blocchi di terreno, città e boschi;
-- frecce, fiamme e visioni selezionando direttamente il bersaglio;
-- accumulo dei colpi a distanza sullo stesso bersaglio nel turno;
-- città tridimensionali, conquista e conteggio per fazione;
-- guarnigioni nascoste fino a quattro unità e uscita dalla città;
-- assedio con più attaccanti, numero minimo richiesto, forza combinata della guarnigione e risultati speciali per le città;
-- percorso esagonale con costi di boschi, montagne, mari, ponti e gorghi;
-- reticolo 67 × 52 con esagoni a punta in alto, passo e offset calibrati direttamente sulle linee stampate di `Mappa 2.png`;
-- maschera completa di mare, laghi e spazi centrali esterni non transitabili;
-- corridoi dei ponti di nuvole della fascia equatoriale distinti dal mare aperto;
-- cuciture planetarie dei bordi alfabetici, con passaggio verso i due esagoni corrispondenti;
-- distanza, movimento, zone d'influenza, assedi e ritirate coerenti anche oltre bordo;
-- orientamento corretto delle annotazioni di boschi, montagne e gorghi magici sui quattro continenti;
-- reticolo di calibrazione attivabile con sovrapposizione cromatica dei terreni interpretati dal motore;
-- mappa terreno 67 × 52 ricavata dai centri di `Mappa 2.png`, con mare, boschi, montagne, ponti di nuvole e vuoto cosmico; i vortici mantengono la verifica manuale prioritaria;
-- modalità di verifica del terreno: attivando **Griglia**, il passaggio del mouse mostra coordinate e interpretazione; il selettore consente di salvare correzioni locali persistenti per ogni esagono;
-- pedine ritagliate nuovamente dalle quattro tavole originali, centrate e isolate dall'esagono adiacente;
-- ispettore esagono al passaggio del mouse con coordinate, continente, terreno, costi, difesa, schierabilità e occupante;
-- bonus difensivi del terreno applicati al combattimento;
-- determinazione del vincitore in base alle città controllate al 25º mese;
-- modalità solitaria con popolo umano selezionabile e avversari controllati dall'IA;
-- lobby Firebase REST per autenticazione anonima, creazione e accesso a stanze tramite codice;
-- sincronizzazione online di turno, schieramento, pedine, scorte, città e guarnigioni;
-- test automatici delle regole e degli esempi del manuale.
+## Struttura
 
-Rimangono la riclassificazione definitiva dei terreni sulla nuova griglia TTS, la verifica manuale delle coste e il collaudo del multiplayer con un progetto Firebase reale. Il modulo TTS fornisce geometria e posizioni degli scenari, ma non una mappa logica dei terreni.
+| Percorso | Contenuto |
+|---|---|
+| `scripts/core/` | Modello delle regole, indipendente dalla grafica: `regole.gd` (tabelle e pezzi), `mappa.gd` (terreno e vicinanze), `partita.gd` (stato e azioni), `ia.gd` |
+| `scripts/vista/` | Tavolo 3D, pedine, interfaccia, menu e tema grafico |
+| `scripts/online/` | Client REST di Firebase |
+| `tests/` | `test_regole.gd` (verifiche delle regole) e `simula_partita.gd` (partita completa fra IA) |
+| `tools/genera_pedine.py` | Rigenera le facce delle pedine dalle scansioni in `docs/original/pedine` |
+| `docs/original/` | Regolamenti, ruote, fogli delle pedine e illustrazioni originali (esclusi dal progetto Godot) |
 
-## Configurazione Firebase
+## Comandi
 
-Il client usa le API REST ufficiali e non richiede un SDK Godot. Nel progetto Firebase occorre:
+- **Tasto sinistro**: seleziona; trascinando sposta il tavolo.
+- **Tasto destro**: trascinando ruota la vista; un clic annulla la selezione.
+- **Rotella**: zoom.
+- **G**: reticolo degli esagoni.
+- **Invio**: fase successiva.
+- **Esc**: annulla.
+- **Nella fase di combattimento**:
+  - un clic sui propri pezzi li aggiunge al gruppo d'attacco;
+  - un clic su un nemico apre l'anteprima dello scontro;
+  - Maiusc+clic aggiunge altri nemici quando si attacca con un solo pezzo.
 
-- attivare l'accesso anonimo in Authentication;
-- creare un Realtime Database;
-- applicare le regole contenute in `firebase.database.rules.json`;
-- fornire al client il Database URL HTTPS e la Web API key dalla configurazione dell'app Web.
+## Test
 
-La Web API key identifica il progetto ma non sostituisce le regole di sicurezza: ogni richiesta al database viene autenticata con un token anonimo. Nessuna configurazione di un progetto Firebase reale viene salvata nel repository.
+```
+godot --headless --path . --script res://tests/test_regole.gd
+GIOCATORI=4 godot --headless --path . --script res://tests/simula_partita.gd
+```
 
-Per lo sviluppo locale si può copiare `firebase_config.example.json` in `firebase_config.json`; quest'ultimo è ignorato da Git. Per GitHub Pages vanno invece creati nei Secrets del repository:
+La pipeline di GitHub Pages esegue i test prima di esportare la versione Web.
 
-- `FIREBASE_DATABASE_URL`;
-- `FIREBASE_WEB_API_KEY`.
+## Firebase
 
-La pipeline genera automaticamente il file di configurazione soltanto dentro la build pubblicata. Se i Secrets non sono presenti, URL e API key possono comunque essere inseriti manualmente nella lobby.
+La configurazione è la stessa degli altri giochi della ludoteca. Le stanze sono sotto `zargos_lords/stanze/<codice>`; il frammento di regole è in `firebase.database.rules.json`.
 
-## Avvio
+Per lo sviluppo locale si copia `firebase_config.example.json` in `firebase_config.json`. Per Pages si usano i Secrets `FIREBASE_DATABASE_URL` e `FIREBASE_WEB_API_KEY`.
 
-Aprire `project.godot` con Godot 4.7 e avviare la scena principale.
+## Interpretazioni
 
-La prima versione Web è pubblicata tramite GitHub Pages all'indirizzo:
+Alcuni punti del regolamento sono ambigui. Le scelte fatte qui sono queste:
 
-https://tannoiser2.github.io/Zargos-Lords/
-
-## Controlli
-
-- tasto destro e trascinamento: ruota il tabellone;
-- tasto centrale e trascinamento: sposta la visuale;
-- rotella: ingrandisce o allontana;
-- clic sinistro: seleziona una pedina o una destinazione;
-- tasto sinistro e trascinamento: sposta liberamente il tabellone;
-- prima del mese 1, selezionare pedine o città e collocarle sui propri continenti, quindi premere Termina schieramento;
-- Reticolo esagoni o tasto G: mostra o nasconde la griglia del motore e la classificazione cromatica dei terreni; passando il mouse su ciascun esagono vengono mostrati coordinate, continente, costi di movimento, difesa, schierabilità e occupante;
-- in combattimento, selezionare l'attaccante e poi una pedina nemica adiacente;
-- Esc: annulla la selezione.
-
-## Edizione di riferimento
-
-La prima implementazione sarà basata sul gioco originale con Cavalieri, Draghi, Alati e Monaci. Il materiale relativo a *Zargo's Lords 2* e alla nuova edizione non fa parte di questo primo caricamento.
-
-## Nota sui materiali
-
-I file presenti sono conservati come sorgenti di lavoro. Prima della pubblicazione di una build distribuibile, ogni elemento grafico verrà verificato, ripulito e convertito in asset adatti all'uso digitale.
+- L'esempio del regolamento (12 contro 5, dado 4) nel testo stampato dà D5, ma la ruota fotografata e la trascrizione italiana danno D3: fa fede la ruota.
+- Una guarnigione assediata non può arretrare, quindi qualsiasi esito D la elimina e la città passa all'attaccante.
+- Chi combatte dall'interno di una città non arretra.
+- La carica del Cavaliere è "frontale" quando il nemico si trova sul prolungamento della linea di carica, "laterale" negli altri casi.
+- Le ritirate sono scelte automaticamente nella direzione migliore per chi arretra.
+- Lo scambio degli ostaggi nelle alleanze non è ancora implementato.

@@ -1,13 +1,14 @@
 {
   "rules": {
-    "games": {
-      "$room": {
-        ".read": "auth != null",
-        ".write": "auth != null",
-        ".validate": "newData.hasChildren(['version', 'revision', 'state'])",
-        "version": { ".validate": "newData.isNumber() && newData.val() == 1" },
-        "revision": { ".validate": "newData.isNumber() && newData.val() >= 0" },
-        "$other": { ".validate": true }
+    "zargos_lords": {
+      "stanze": {
+        "$stanza": {
+          ".read": "auth != null",
+          ".write": "auth != null",
+          "version": { ".validate": "newData.isNumber() && newData.val() == 2" },
+          "revision": { ".validate": "newData.isNumber() && newData.val() >= 0" },
+          "$altro": { ".validate": true }
+        }
       }
     }
   }

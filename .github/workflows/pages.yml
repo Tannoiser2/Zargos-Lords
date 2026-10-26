@@ -31,8 +31,8 @@ jobs:
       - name: Verifica le regole
         run: |
           /tmp/godot-bin/Godot_v4.7-stable_linux.x86_64 --headless --path . --editor --quit
-          /tmp/godot-bin/Godot_v4.7-stable_linux.x86_64 --headless --path . --script res://tests/test_rules.gd
-          /tmp/godot-bin/Godot_v4.7-stable_linux.x86_64 --headless --path . --script res://tests/test_online_snapshot.gd
+          /tmp/godot-bin/Godot_v4.7-stable_linux.x86_64 --headless --path . --script res://tests/test_regole.gd
+          GIOCATORI=2 /tmp/godot-bin/Godot_v4.7-stable_linux.x86_64 --headless --path . --script res://tests/simula_partita.gd
       - name: Configura Firebase per la build pubblica
         env:
           FIREBASE_DATABASE_URL: ${{ secrets.FIREBASE_DATABASE_URL }}

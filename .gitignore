@@ -6,12 +6,11 @@ zargosl2.doc
 zargosl2-aides.doc
 zargos2-1.jpg
 zargos2-2.jpg
+*.ttsmod
 
 # File generati da Godot
 .godot/
 export.cfg
-/*.jpg.import
-/*.png.import
 
 # Credenziali e configurazioni locali
 .env
@@ -20,6 +19,4 @@ firebase-debug.log
 firebase_config.json
 tmp/
 build/
-
-
-
+_dev/
