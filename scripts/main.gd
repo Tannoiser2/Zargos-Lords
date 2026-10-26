@@ -22,6 +22,8 @@ var escort_button: Button
 var special_button: Button
 var deployment_button: Button
 var grid_button: CheckButton
+var terrain_editor: HBoxContainer
+var terrain_selector: OptionButton
 var unit_tray: HBoxContainer
 var unit_tray_title: Label
 var next_phase_button: Button
@@ -169,6 +171,26 @@ func _build_hex_overlay() -> void:
 
 	terrain_overlay = MeshInstance3D.new()
 	terrain_overlay.name = "TerrainInterpretationOverlay"
+	_rebuild_terrain_overlay()
+	terrain_overlay.visible = false
+	add_child(terrain_overlay)
+	inspection_marker = MeshInstance3D.new()
+	inspection_marker.name = "InspectedHexMarker"
+	var marker_mesh := CylinderMesh.new()
+	marker_mesh.top_radius = HEX_RADIUS * 0.82
+	marker_mesh.bottom_radius = HEX_RADIUS * 0.82
+	marker_mesh.height = 0.008
+	marker_mesh.radial_segments = 6
+	var marker_material := StandardMaterial3D.new()
+	marker_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	marker_material.albedo_color = Color(1.0, 0.86, 0.05, 0.48)
+	marker_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	marker_mesh.material = marker_material
+	inspection_marker.mesh = marker_mesh
+	inspection_marker.visible = false
+	add_child(inspection_marker)
+
+func _rebuild_terrain_overlay() -> void:
 	var terrain_mesh := ImmediateMesh.new()
 	var terrain_colors := {
 		ZargosRules.Terrain.PLAIN: Color(0.45, 0.90, 0.36, 0.07),
@@ -199,23 +221,6 @@ func _build_hex_overlay() -> void:
 					terrain_mesh.surface_add_vertex(center + Vector3(cos(b) * HEX_RADIUS * 0.91, 0, sin(b) * HEX_RADIUS * 0.91))
 		terrain_mesh.surface_end()
 	terrain_overlay.mesh = terrain_mesh
-	terrain_overlay.visible = false
-	add_child(terrain_overlay)
-	inspection_marker = MeshInstance3D.new()
-	inspection_marker.name = "InspectedHexMarker"
-	var marker_mesh := CylinderMesh.new()
-	marker_mesh.top_radius = HEX_RADIUS * 0.82
-	marker_mesh.bottom_radius = HEX_RADIUS * 0.82
-	marker_mesh.height = 0.008
-	marker_mesh.radial_segments = 6
-	var marker_material := StandardMaterial3D.new()
-	marker_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	marker_material.albedo_color = Color(1.0, 0.86, 0.05, 0.48)
-	marker_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	marker_mesh.material = marker_material
-	inspection_marker.mesh = marker_mesh
-	inspection_marker.visible = false
-	add_child(inspection_marker)
 
 func _build_movement_overlay() -> void:
 	movement_overlay = MeshInstance3D.new()
@@ -413,6 +418,23 @@ func _build_ui() -> void:
 	deployment_button.visible = false
 	deployment_button.pressed.connect(_finish_deployment)
 	secondary_commands.add_child(deployment_button)
+	terrain_editor = HBoxContainer.new()
+	terrain_editor.visible = false
+	terrain_editor.add_theme_constant_override("separation", 4)
+	commands.add_child(terrain_editor)
+	terrain_selector = OptionButton.new()
+	for label in ["Pianura", "Bosco", "Montagna", "Mare", "Ponte", "Vortice", "Città", "Fuori mappa"]:
+		terrain_selector.add_item(label)
+	terrain_selector.custom_minimum_size.x = 150
+	terrain_editor.add_child(terrain_selector)
+	var apply_terrain := Button.new()
+	apply_terrain.text = "APPLICA ALL'ESA"
+	apply_terrain.pressed.connect(_apply_inspected_terrain)
+	terrain_editor.add_child(apply_terrain)
+	var reset_terrain := Button.new()
+	reset_terrain.text = "AZZERA CORREZIONI"
+	reset_terrain.pressed.connect(_reset_terrain_corrections)
+	terrain_editor.add_child(reset_terrain)
 
 	event_label = Label.new()
 	event_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -1008,6 +1030,7 @@ func _set_grid_visible(enabled: bool) -> void:
 	terrain_overlay.visible = enabled
 	inspection_marker.visible = false
 	inspected_hex = Vector2i(-1, -1)
+	terrain_editor.visible = enabled
 	if enabled:
 		score_label.text = _grid_legend_text()
 		_show_event("Passa il mouse su un esagono per leggere l'interpretazione completa del motore.")
@@ -1036,6 +1059,7 @@ func _inspect_hex_at(screen_position: Vector2) -> void:
 	inspection_marker.position = hex_to_world(hex) + Vector3(0, 0.139, 0)
 	inspection_marker.visible = true
 	var terrain_type := board_data.terrain_at(hex)
+	terrain_selector.select(int(terrain_type))
 	var ground_cost := ZargosRules.terrain_cost(terrain_type, false)
 	var flying_cost := ZargosRules.terrain_cost(terrain_type, true)
 	var occupancy := "libero"
@@ -1051,6 +1075,21 @@ func _inspect_hex_at(screen_position: Vector2) -> void:
 		hex.x, hex.y, _terrain_name(terrain_type), board_data.continent_at(hex), ground_text, flying_text,
 		board_data.defense_bonus_at(hex), "schierabile" if board_data.is_deployment_hex(hex) else "non schierabile", occupancy,
 	]
+
+func _apply_inspected_terrain() -> void:
+	if inspected_hex.x < 0:
+		_show_event("Passa prima il mouse sull'esagono da correggere.")
+		return
+	var terrain_type := terrain_selector.get_selected_id() as ZargosRules.Terrain
+	board_data.set_terrain_override(inspected_hex, terrain_type)
+	_rebuild_terrain_overlay()
+	_show_event("Correzione salvata • ESA %02d,%02d = %s" % [inspected_hex.x, inspected_hex.y, _terrain_name(terrain_type)])
+
+func _reset_terrain_corrections() -> void:
+	board_data.clear_terrain_overrides()
+	board_data = ZargosBoardData.new()
+	_rebuild_terrain_overlay()
+	_show_event("Correzioni locali azzerate e mappatura automatica ripristinata.")
 
 func _pick_at(screen_position: Vector2) -> void:
 	var origin := camera.project_ray_origin(screen_position)

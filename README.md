@@ -52,6 +52,7 @@ Il repository contiene per ora il materiale di riferimento del gioco base:
 - orientamento corretto delle annotazioni di boschi, montagne e gorghi magici sui quattro continenti;
 - reticolo di calibrazione attivabile con sovrapposizione cromatica dei terreni interpretati dal motore;
 - mappa terreno 67 × 52 ricavata dai centri di `Mappa 2.png`, con mare, boschi, montagne, ponti di nuvole e vuoto cosmico; i vortici mantengono la verifica manuale prioritaria;
+- modalità di verifica del terreno: attivando **Griglia**, il passaggio del mouse mostra coordinate e interpretazione; il selettore consente di salvare correzioni locali persistenti per ogni esagono;
 - pedine ritagliate nuovamente dalle quattro tavole originali, centrate e isolate dall'esagono adiacente;
 - ispettore esagono al passaggio del mouse con coordinate, continente, terreno, costi, difesa, schierabilità e occupante;
 - bonus difensivi del terreno applicati al combattimento;

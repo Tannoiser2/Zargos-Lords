@@ -103,6 +103,7 @@ func _init() -> void:
 	for hex in vortex_hexes:
 		terrain[_legacy_coordinate(_scan_coordinate(hex))] = ZargosRules.Terrain.MAGIC_VORTEX
 	_apply_bitmap_terrain_map()
+	_load_user_terrain_overrides()
 
 func _apply_bitmap_terrain_map() -> void:
 	var file := FileAccess.open("res://assets/data/terrain_map.json", FileAccess.READ)
@@ -167,6 +168,34 @@ func defense_bonus_at(hex: Vector2i) -> int:
 func set_terrain(hex: Vector2i, terrain_type: ZargosRules.Terrain) -> void:
 	terrain[hex] = terrain_type
 	distance_cache.clear()
+
+func set_terrain_override(hex: Vector2i, terrain_type: ZargosRules.Terrain) -> void:
+	set_terrain(hex, terrain_type)
+	var overrides := _read_user_overrides()
+	overrides["%d,%d" % [hex.x, hex.y]] = int(terrain_type)
+	_write_user_overrides(overrides)
+
+func clear_terrain_overrides() -> void:
+	_write_user_overrides({})
+
+func _load_user_terrain_overrides() -> void:
+	var overrides := _read_user_overrides()
+	for key: String in overrides:
+		var parts := key.split(",")
+		if parts.size() == 2:
+			terrain[Vector2i(int(parts[0]), int(parts[1]))] = int(overrides[key]) as ZargosRules.Terrain
+
+func _read_user_overrides() -> Dictionary:
+	var file := FileAccess.open("user://terrain_overrides.json", FileAccess.READ)
+	if not file:
+		return {}
+	var parsed: Variant = JSON.parse_string(file.get_as_text())
+	return parsed as Dictionary if parsed is Dictionary else {}
+
+func _write_user_overrides(overrides: Dictionary) -> void:
+	var file := FileAccess.open("user://terrain_overrides.json", FileAccess.WRITE)
+	if file:
+		file.store_string(JSON.stringify(overrides))
 
 func find_movement_cost(start: Vector2i, goal: Vector2i, movement: int, flying: bool, occupied: Callable, stops_movement: Callable = Callable()) -> int:
 	return reachable_hexes(start, movement, flying, occupied, stops_movement).get(goal, -1) as int
