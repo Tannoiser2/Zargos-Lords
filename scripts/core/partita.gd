@@ -9,7 +9,9 @@ signal cambiata
 
 const FASE_SCHIERAMENTO := "schieramento"
 const FASE_ALLEANZE := "alleanze"
+const FASE_SINGOLI := "singoli"      # attacchi singoli e fiamme del Drago prima di muovere
 const FASE_MOVIMENTO := "movimento"
+const FASE_LANCI := "lanci"          # frecce, fiamme e visioni
 const FASE_COMBATTIMENTO := "combattimento"
 const FASE_FINITA := "finita"
 
@@ -220,7 +222,10 @@ func punti_movimento(u: ZPedina) -> int:
 	return g.m()
 
 func puo_muovere(u: ZPedina) -> String:
-	if fase != FASE_MOVIMENTO:
+	if fase == FASE_SINGOLI:
+		if not (u.singolo and u.residuo > 0):
+			return "Ora si fanno gli attacchi singoli: gli altri pezzi muovono nella fase di movimento."
+	elif fase != FASE_MOVIMENTO:
 		return "Non è la fase di movimento."
 	if u.popolo != popolo_di_mano():
 		return "Non è la mossa di questo popolo."
@@ -772,13 +777,11 @@ func valuta_tiro(u: ZPedina, b: ZPedina) -> Dictionary:
 		return {"ok": false, "errore": "Pezzo non disponibile."}
 	if u.agito:
 		return {"ok": false, "errore": "Ha già agito in questa mossa."}
-	if fase == FASE_MOVIMENTO:
+	if fase == FASE_SINGOLI:
 		if not (u.popolo == "Draghi" and u.tipo == "signore" and not u.mosso):
-			return {"ok": false, "errore": "Si tira nella fase di combattimento (solo il Drago può fiammeggiare prima di muovere)."}
-	elif fase != FASE_COMBATTIMENTO:
-		return {"ok": false, "errore": "Non è il momento di tirare."}
-	elif mischia_iniziata:
-		return {"ok": false, "errore": "I lanci si risolvono prima dei combattimenti."}
+			return {"ok": false, "errore": "Prima di muovere può fiammeggiare solo il Signore Drago; gli altri lanci si fanno nella fase dei lanci."}
+	elif fase != FASE_LANCI:
+		return {"ok": false, "errore": "Frecce, fiamme e visioni si lanciano nella fase dei lanci, dopo il movimento."}
 	if b == null or not nemici(b.popolo, u.popolo):
 		return {"ok": false, "errore": "Scegli un nemico."}
 	if not attaccabile(b):
@@ -842,8 +845,8 @@ func _tiro(u: ZPedina, b: ZPedina, eventi: Array) -> void:
 # ---------------------------------------------------------------------------
 
 func puo_attacco_singolo(u: ZPedina) -> String:
-	if fase != FASE_MOVIMENTO or u.popolo != popolo_di_mano():
-		return "Gli attacchi singoli si fanno all'inizio della fase di movimento."
+	if fase != FASE_SINGOLI or u.popolo != popolo_di_mano():
+		return "Gli attacchi singoli si fanno nella loro fase, prima di qualsiasi altro movimento."
 	if not ZRegole.attacco_singolo(u.popolo, u.tipo):
 		return "Solo Alati, Falchi e Serpenti attaccano singolarmente."
 	if u.scortato_da >= 0 or u.paralisi > 0 or not u.in_campo():
@@ -854,8 +857,6 @@ func puo_attacco_singolo(u: ZPedina) -> String:
 		return "Ha già compiuto il suo attacco singolo."
 	if u.mosso or u.agito:
 		return "Ha già agito."
-	if not singoli_aperti:
-		return "Gli attacchi singoli vanno effettuati prima di qualsiasi altro movimento."
 	return ""
 
 ## Esagoni da cui il pezzo può attaccare singolarmente il bersaglio.
@@ -1007,8 +1008,6 @@ func _esegui(az: Dictionary, eventi: Array) -> String:
 			var dest := _hex(az.h)
 			if not raggiungibili(u).has(dest):
 				return "Destinazione non raggiungibile."
-			if not u.singolo and not _guida(u).singolo:
-				singoli_aperti = false
 			_muovi(u, dest, eventi)
 			return ""
 		"singolo":
@@ -1038,7 +1037,7 @@ func _esegui(az: Dictionary, eventi: Array) -> String:
 			return ""
 		"attacco":
 			if fase != FASE_COMBATTIMENTO:
-				return "Gli scontri si risolvono nella fase di combattimento."
+				return "Gli scontri corpo a corpo si risolvono nella fase dei combattimenti."
 			var v := valuta_attacco(az.att, az.dif)
 			if not v.ok:
 				return v.errore
@@ -1290,7 +1289,6 @@ func _scompari(u: ZPedina, eventi: Array) -> String:
 	u.scomparso = true
 	u.mese_scomparsa = turno_globale
 	u.mosso = true
-	singoli_aperti = false
 	_sporca()
 	_log("Un Signore Monaco scompare.")
 	eventi.append({"t": "scompare", "u": u.id})
@@ -1357,13 +1355,69 @@ func _avanza_fase(eventi: Array) -> String:
 		FASE_SCHIERAMENTO:
 			return _fine_schieramento(eventi)
 		FASE_ALLEANZE:
-			fase = FASE_MOVIMENTO
+			_entra_in_fase(FASE_SINGOLI, eventi)
+		FASE_SINGOLI:
+			_entra_in_fase(FASE_MOVIMENTO, eventi)
 		FASE_MOVIMENTO:
 			_chiudi_movimento(eventi)
-			fase = FASE_COMBATTIMENTO
+			_entra_in_fase(FASE_LANCI, eventi)
+		FASE_LANCI:
+			_entra_in_fase(FASE_COMBATTIMENTO, eventi)
 		FASE_COMBATTIMENTO:
 			_fine_turno(eventi)
 	return ""
+
+## Entra in una fase; le fasi in cui non c'è nulla da fare vengono saltate.
+func _entra_in_fase(f: String, eventi: Array) -> void:
+	fase = f
+	if f == FASE_SINGOLI and not ha_azioni_singole():
+		fase = FASE_MOVIMENTO
+	if fase == FASE_LANCI and not ha_lanci():
+		fase = FASE_COMBATTIMENTO
+	eventi.append({"t": "fase", "fase": fase})
+
+## Qualche pezzo può fare un attacco singolo o fiammeggiare prima di muovere?
+func ha_azioni_singole() -> bool:
+	var p := popolo_di_mano()
+	var vecchia := fase
+	fase = FASE_SINGOLI
+	var ok := false
+	for u in pedine:
+		if u.popolo != p or not u.in_campo():
+			continue
+		if ZRegole.attacco_singolo(u.popolo, u.tipo) and puo_attacco_singolo(u) == "":
+			for b in pedine:
+				if attaccabile(b) and nemici(b.popolo, p) and mappa.distanza(u.hex, b.hex) <= u.m() + 1:
+					if not basi_attacco_singolo(u, b).is_empty():
+						ok = true
+						break
+		elif u.popolo == "Draghi" and u.tipo == "signore":
+			for b in pedine:
+				if attaccabile(b) and nemici(b.popolo, p) and mappa.distanza(u.hex, b.hex) <= 5 and valuta_tiro(u, b).ok:
+					ok = true
+					break
+		if ok:
+			break
+	fase = vecchia
+	return ok
+
+## Qualche tiratore ha un bersaglio valido?
+func ha_lanci() -> bool:
+	var p := popolo_di_mano()
+	var vecchia := fase
+	fase = FASE_LANCI
+	var ok := false
+	for u in pedine:
+		if u.popolo != p or tipo_tiro(u) == "" or u.agito or not u.viva or u.scomparso:
+			continue
+		for b in pedine:
+			if attaccabile(b) and nemici(b.popolo, p) and mappa.distanza(u.hex, b.hex) <= gittata(u) and valuta_tiro(u, b).ok:
+				ok = true
+				break
+		if ok:
+			break
+	fase = vecchia
+	return ok
 
 func _chiudi_movimento(eventi: Array) -> void:
 	var p := popolo_di_mano()
@@ -1428,7 +1482,10 @@ func _inizia_turno(eventi: Array) -> void:
 	proposte.assign(proposte.filter(func(k): return not k.begins_with(p + ">")))
 	singoli_aperti = true
 	mischia_iniziata = false
-	fase = FASE_ALLEANZE if popoli.size() >= 3 else FASE_MOVIMENTO
+	if popoli.size() >= 3:
+		fase = FASE_ALLEANZE
+	else:
+		_entra_in_fase(FASE_SINGOLI, eventi)
 	if turno == 0:
 		_log("— Mese %d dell'Anno di Zargo —" % mese)
 	_log("Muovono %s." % ZRegole.gli(p))

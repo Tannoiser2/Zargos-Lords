@@ -15,6 +15,7 @@ func _init() -> void:
 	var azioni := 0
 	var rifiuti := 0
 	var combattimenti := 0
+	var pile_illegali := 0
 	while g.fase != ZPartita.FASE_FINITA and azioni < 40000:
 		var az := ia.prossima_azione(g)
 		var r := g.esegui(az)
@@ -31,6 +32,12 @@ func _init() -> void:
 			for e in r.eventi:
 				if e.t == "combattimento":
 					combattimenti += 1
+		var errore_pila := controlla_pile(g)
+		if errore_pila != "":
+			push_error("Pila illegale dopo %s: %s" % [str(az), errore_pila])
+			pile_illegali += 1
+			if pile_illegali > 5:
+				break
 		# Ogni tanto lo stato viene salvato e ricaricato, come avviene online.
 		if azioni % 97 == 0:
 			var copia := ZPartita.new()
@@ -42,4 +49,27 @@ func _init() -> void:
 	print("Vincitori: ", g.vincitori)
 	for riga in g.registro.slice(g.registro.size() - 12):
 		print("  · ", riga)
-	quit(0 if g.fase == ZPartita.FASE_FINITA else 1)
+	print("Pile illegali: %d" % pile_illegali)
+	quit(0 if g.fase == ZPartita.FASE_FINITA and pile_illegali == 0 else 1)
+
+## Un esagono può contenere un solo pezzo, salvo un fante con lo scortato;
+## nessun pezzo in campo sta su una città.
+func controlla_pile(g: ZPartita) -> String:
+	var per_hex := {}
+	for u in g.pedine:
+		if u.in_campo():
+			if not per_hex.has(u.hex):
+				per_hex[u.hex] = []
+			per_hex[u.hex].append(u)
+	for h in per_hex:
+		var l: Array = per_hex[h]
+		if not g.citta_in(h).is_empty():
+			return "pezzo in campo sulla città %s" % str(h)
+		if l.size() > 2:
+			return "%d pezzi in %s" % [l.size(), str(h)]
+		if l.size() == 2:
+			var a: ZPedina = l[0]
+			var b: ZPedina = l[1]
+			if not (a.scorta == b.id or b.scorta == a.id):
+				return "due pezzi senza scorta in %s: %s %s / %s %s" % [str(h), a.popolo, a.tipo, b.popolo, b.tipo]
+	return ""

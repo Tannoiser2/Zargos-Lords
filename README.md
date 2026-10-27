@@ -10,7 +10,7 @@ Pubblicazione: https://tannoiser2.github.io/Zargos-Lords/
 
 - **Regole complete del gioco base**, trascritte dal regolamento italiano e dalle ruote originali:
   - schieramento con città a distanza minima di 4 esagoni e mai sulla costa, guarnigioni coperte fino a 4 pezzi;
-  - sequenza alleanze → movimento → tiri e scontri, con ordine di mossa fisso e calendario di 25 mesi;
+  - mossa divisa in fasi: alleanze → attacchi singoli (Alati, Falchi, Serpenti, e fiamme del Drago prima di muovere) → movimento → lanci (frecce, fiamme, visioni) → corpo a corpo; le fasi senza azioni possibili vengono saltate; ordine di mossa fisso e calendario di 25 mesi;
   - movimento con boschi (2 punti), montagne (un'intera mossa per salire), gorghi magici (paralisi per tre mosse e inattaccabilità), ponti di nuvole e cuciture planetarie dei bordi;
   - zone d'influenza;
   - attacchi combinati, o di un solo pezzo contro più nemici;
@@ -103,4 +103,6 @@ Alcuni punti del regolamento sono ambigui. Le scelte fatte qui sono queste:
 - La carica del Cavaliere è "frontale" quando il nemico si trova sul prolungamento della linea di carica, "laterale" negli altri casi.
 - Le ritirate sono scelte automaticamente nella direzione migliore per chi arretra; se un pezzo amico spinto non può arretrare, viene sacrificato al posto di chi si ritira solo quando vale meno.
 - Le guarnigioni sono coperte: non esercitano zona d'influenza e i Maghi in città non danno il +2 ai pezzi fuori.
+- Fantarcieri e Lanciafiamme in attacco possono solo tirare; Maghi, Illusionisti e Signori Draghi scelgono fra lancio e corpo a corpo (chi lancia non combatte più in quella mossa).
+- Il segnalino di sparizione dei Monaci non blocca l'esagono.
 - Lo scambio degli ostaggi nelle alleanze non è ancora implementato.

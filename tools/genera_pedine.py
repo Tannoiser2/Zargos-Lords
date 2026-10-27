@@ -25,7 +25,7 @@ COUNTERS = {
                "lanciafiamme": (530, 459), "fante": (839, 549), "citta": (762, 954)},
     "monaci": {"source": "zargos4.jpg", "signore": (535, 143), "illusionista": (690, 323),
                "cavaliere": (535, 413), "fante": (767, 548), "citta": (535, 855),
-               "scomparso": (1060, 193)},
+               "scomparso": (766, 288)},
 }
 VALUES = {
     "cavalieri": {"signore": (10, 7), "mago": (2, 5), "fantarcere": (2, 5), "fante": (5, 4)},
@@ -41,10 +41,33 @@ def hex_points(cx, cy, r, flat=False):
     return [(cx + r * math.cos(math.radians(60 * i + off)), cy + r * math.sin(math.radians(60 * i + off))) for i in range(6)]
 
 
+def figura_esagono(sheet, centre):
+    """Ritaglia un'intera pedina seguendo il suo contorno esagonale (per i
+    segnalini senza valori, come la sparizione dei Monaci)."""
+    cx, cy = centre
+    r = 40
+    crop = sheet.crop((cx - r, cy - r, cx + r, cy + r)).convert("RGBA")
+    mask = Image.new("L", crop.size, 0)
+    pts = [(r + (r - 5) * math.cos(math.radians(60 * i)), r + (r - 5) * math.sin(math.radians(60 * i)) * 0.95) for i in range(6)]
+    ImageDraw.Draw(mask).polygon(pts, fill=255)
+    px = crop.load()
+    for y in range(crop.height):
+        for x in range(crop.width):
+            rr, g, b, a = px[x, y]
+            light = min(rr, g, b)
+            if light > 225:
+                px[x, y] = (rr, g, b, 0)
+            elif light > 195:
+                px[x, y] = (rr, g, b, int(255 * (225 - light) / 30))
+    crop.putalpha(ImageChops.multiply(crop.getchannel("A"), mask))
+    return crop
+
+
 def figure(sheet, centre, wide):
     cx, cy = centre
     hw = 50 if wide else 27
-    crop = sheet.crop((cx - hw, cy - 46, cx + hw, cy + 44)).convert("RGBA")
+    alto = 34 if wide == "basso" else 46
+    crop = sheet.crop((cx - hw, cy - alto, cx + hw, cy + 44)).convert("RGBA")
     px = crop.load()
     for y in range(crop.height):
         for x in range(crop.width):
@@ -92,8 +115,8 @@ def build(faction, kind, sheet, centre):
     d.polygon(hex_points(c, c, 240), fill=col + (255,))
     d.polygon(hex_points(c, c, 214), fill=(240, 232, 212, 255))
     wide = kind in ("citta", "serpente", "falco", "cavaliere", "scomparso")
-    fig = figure(sheet, centre, wide)
-    scale = 3.6 if not wide else 3.0
+    fig = figura_esagono(sheet, centre) if kind == "scomparso" else figure(sheet, centre, wide)
+    scale = 4.9 if kind == "scomparso" else (3.6 if not wide else 3.0)
     fig = fig.resize((int(fig.width * scale), int(fig.height * scale)), Image.Resampling.LANCZOS)
     fig = fig.filter(ImageFilter.UnsharpMask(radius=2, percent=120, threshold=2))
     mask = Image.new("L", (SIZE, SIZE), 0)

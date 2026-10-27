@@ -119,6 +119,13 @@ func _imposta_faccia(p_popolo: String, p_tipo: String) -> void:
 	corpo.set_surface_override_material(0, materiale_faccia("res://assets/units/%s/%s.png" % [p_popolo.to_lower(), p_tipo]))
 	corpo.set_surface_override_material(1, materiale_bordo(ZRegole.COLORI[p_popolo].darkened(0.35)))
 
+var _faccia_attuale := ""
+
+func faccia(t: String) -> void:
+	if t != _faccia_attuale:
+		_faccia_attuale = t
+		corpo.set_surface_override_material(0, materiale_faccia("res://assets/units/%s/%s.png" % [popolo.to_lower(), t]))
+
 func cambia_popolo(p: String) -> void:
 	if p != popolo:
 		_imposta_faccia(p, tipo)

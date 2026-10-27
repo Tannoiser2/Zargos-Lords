@@ -280,10 +280,11 @@ func pulisci_evidenziazioni(tranne: Array = []) -> void:
 func _posizione_pedina(g: ZPartita, u: ZPedina) -> Vector3:
 	var p := mondo(u.hex)
 	if u.scorta >= 0:
-		p.y += ZSegnalino.SPESSORE   # il fante di scorta sta sopra
-		p += Vector3(0.012, 0, 0.012)
-	if u.scomparso:
-		p.y -= 0.0
+		p.y += ZSegnalino.SPESSORE   # il fante di scorta sta sopra, un po' spostato
+		p += Vector3(0.028, 0, 0.028)
+	if u.scomparso and not g.pedine_in(u.hex).is_empty():
+		# Segnalino di sparizione sotto un pezzo arrivato dopo: lo si sposta di lato.
+		p += Vector3(-0.07, -0.002, -0.05)
 	return p
 
 ## Allinea la scena allo stato della partita. Le pedine che hanno cambiato
@@ -307,10 +308,13 @@ func sincronizza(g: ZPartita, durata := 0.25) -> void:
 		s.visible = true
 		s.paralizzato(u.paralisi > 0)
 		if u.scomparso:
-			s.corpo.transparency = 0.65
-			s.testo("scomparso", ZTema.OCRA)
+			# Al posto del Signore Monaco resta il segnalino di sparizione.
+			s.faccia("scomparso")
+			s.scale = Vector3.ONE * 0.75
+			s.testo("")
 		else:
-			s.corpo.transparency = 0.0
+			s.faccia(u.tipo)
+			s.scale = Vector3.ONE
 			s.testo(str(u.paralisi) if u.paralisi > 0 else "", Color(0.95, 0.6, 1.0))
 	for id in segnalini.keys():
 		if not visti.has(id):

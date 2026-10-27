@@ -159,7 +159,7 @@ func _init() -> void:
 	var arciere := metti(g, "Cavalieri", "fantarcere", p)
 	var bers := metti(g, "Monaci", "signore", g.mappa.linea(p, 0, 3)[-1])
 	var storto := metti(g, "Monaci", "fante", g.mappa.vicino_dir(g.mappa.linea(p, 0, 2)[-1], 1))
-	g.fase = ZPartita.FASE_COMBATTIMENTO
+	g.fase = ZPartita.FASE_LANCI
 	controlla(g.valuta_tiro(arciere, bers).ok, "tiro in linea retta entro 8 esagoni")
 	var vs: Dictionary = g.valuta_tiro(arciere, storto)
 	controlla(not vs.ok or g.mappa.direzione_retta(p, storto.hex) >= 0, "niente tiro fuori dalla linea retta")
@@ -194,7 +194,7 @@ func _init() -> void:
 	for u in g.pedine:
 		u.popolo = "Alati" if u.popolo == "Cavalieri" else u.popolo
 	g.pedine.clear()
-	for tipo in ["signore", "falco", "fante"]:
+	for tipo in ["signore", "falco", "fante", "fantarcere"]:
 		for q in 2:
 			var nu := ZPedina.new()
 			nu.id = g.pedine.size()
@@ -214,6 +214,7 @@ func _init() -> void:
 	p = pianura_aperta(g)
 	var alato := metti(g, "Alati", "signore", p)
 	var preda := metti(g, "Monaci", "fante", g.mappa.linea(p, 0, 3)[-1])
+	g.fase = ZPartita.FASE_SINGOLI
 	controlla(g.puo_attacco_singolo(alato) == "", "l'Alato può attaccare singolarmente")
 	var basi := g.basi_attacco_singolo(alato, preda)
 	controlla(not basi.is_empty(), "esistono esagoni da cui attaccare in volo")
@@ -221,9 +222,14 @@ func _init() -> void:
 	controlla(r2.ok and alato.singolo and alato.agito, "attacco singolo risolto subito: " + g.registro[-1])
 	var falco := metti(g, "Alati", "falco", g.mappa.linea(p, 3, 3)[-1])
 	var fante_a := metti(g, "Alati", "fante", g.mappa.linea(p, 3, 4)[-1])
+	g.fase = ZPartita.FASE_MOVIMENTO
 	controlla(g.esegui({"a": "muovi", "u": fante_a.id, "h": [falco.hex.x, falco.hex.y]}).ok, "un fante si pone di scorta")
 	controlla(fante_a.scorta == falco.id and falco.scortato_da == fante_a.id, "coppia scorta/scortato formata")
-	controlla(g.puo_attacco_singolo(falco) != "", "dopo un movimento normale non si fanno più attacchi singoli")
+	controlla(g.puo_attacco_singolo(falco) != "", "nella fase di movimento non si fanno più attacchi singoli")
+	controlla(not g.esegui({"a": "attacco", "att": [alato.id], "dif": [preda.id]}).ok, "niente corpo a corpo durante il movimento")
+	g.fase = ZPartita.FASE_COMBATTIMENTO
+	var arciere2 := metti(g, "Alati", "fantarcere", g.mappa.linea(p, 2, 6)[-1])
+	controlla(not g.valuta_tiro(arciere2, preda).ok, "nella fase dei combattimenti non si tira più")
 	g.turno = 1
 	g.fase = ZPartita.FASE_MOVIMENTO
 	g.turno_globale = 5
@@ -233,7 +239,7 @@ func _init() -> void:
 	g.turno_globale = 6
 	var dest: Vector2i = g.destinazioni_ricomparsa(monaco)[0]
 	controlla(g.esegui({"a": "ricompari", "u": monaco.id, "h": [dest.x, dest.y]}).ok and not monaco.scomparso, "e ricompare alla mossa successiva")
-	g.fase = ZPartita.FASE_COMBATTIMENTO
+	g.fase = ZPartita.FASE_LANCI
 	var illu := metti(g, "Monaci", "illusionista", g.mappa.linea(falco.hex, 1, 2)[-1])
 	var vt := g.valuta_tiro(illu, falco)
 	var r3 := g.esegui({"a": "tiro", "u": illu.id, "b": falco.id})

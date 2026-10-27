@@ -35,6 +35,8 @@ var velo: ColorRect
 var attesa: Label
 var banner: PanelContainer
 var box_banner: HBoxContainer
+var box_scontro: PanelContainer
+var scroll_selezione: ScrollContainer
 var pannello_ruota: PanelContainer
 var ruota: ZRuota
 var ruota_titolo: Label
@@ -120,7 +122,13 @@ func _pannello_laterale() -> void:
 	box_popoli.add_theme_constant_override("separation", 4)
 	v.add_child(box_popoli)
 	v.add_child(HSeparator.new())
+	# Scheda dello scontro in corso: chi attacca e chi difende.
+	box_scontro = PanelContainer.new()
+	box_scontro.add_theme_stylebox_override("panel", ZTema.riquadro(ZTema.CUOIO_SCURO, ZTema.OCRA, 2, 8, 10))
+	box_scontro.visible = false
+	v.add_child(box_scontro)
 	var scroll_sel := ScrollContainer.new()
+	scroll_selezione = scroll_sel
 	scroll_sel.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	scroll_sel.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	scroll_sel.size_flags_stretch_ratio = 1.4
@@ -180,11 +188,16 @@ func _barra_bassa() -> void:
 
 func _popup() -> void:
 	popup = PanelContainer.new()
-	popup.set_anchors_preset(Control.PRESET_CENTER_TOP)
-	popup.offset_top = 80
-	popup.offset_left = -230
-	popup.offset_right = 230 - LARGHEZZA_PANNELLO
-	popup.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	popup.anchor_left = 1.0
+	popup.anchor_right = 1.0
+	popup.anchor_top = 1.0
+	popup.anchor_bottom = 1.0
+	popup.offset_right = -LARGHEZZA_PANNELLO - 24
+	popup.offset_bottom = -70
+	popup.offset_left = popup.offset_right - 470
+	popup.offset_top = popup.offset_bottom - 90
+	popup.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+	popup.grow_vertical = Control.GROW_DIRECTION_BEGIN
 	popup.add_theme_stylebox_override("panel", ZTema.riquadro(ZTema.CUOIO, ZTema.CUOIO_SCURO, 3, 12, 16))
 	popup.mouse_filter = Control.MOUSE_FILTER_STOP
 	radice.add_child(popup)
@@ -253,15 +266,15 @@ func _schieramento_banner(popolo: String, pezzi: Array, didascalia: String) -> C
 	var titolo := ZTema.etichetta(popolo.to_upper(), 22, ZRegole.COLORI.get(popolo, ZTema.AVORIO).lightened(0.25), ZTema.titolo)
 	titolo.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	v.add_child(titolo)
-	var h := HBoxContainer.new()
-	h.add_theme_constant_override("separation", 2)
-	h.alignment = BoxContainer.ALIGNMENT_CENTER
+	var h := HFlowContainer.new()
+	h.add_theme_constant_override("h_separation", 2)
+	h.alignment = FlowContainer.ALIGNMENT_CENTER
 	for t in pezzi.slice(0, 6):
 		var img := TextureRect.new()
 		img.texture = t
 		img.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 		img.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-		img.custom_minimum_size = Vector2(54, 54)
+		img.custom_minimum_size = Vector2(46, 46)
 		h.add_child(img)
 	v.add_child(h)
 	var d := ZTema.etichetta(didascalia, 13, Color(ZTema.AVORIO, 0.8), ZTema.testo_forte)
@@ -269,68 +282,72 @@ func _schieramento_banner(popolo: String, pezzi: Array, didascalia: String) -> C
 	v.add_child(d)
 	return v
 
-## Fascia in alto con le pedine dei due schieramenti.
+## Scheda dello scontro nel pannello a destra, con le pedine dei due schieramenti.
 func mostra_banner(pa: String, att: Array, forza_a: int, pd: String, dif: Array, forza_d: int, tipo := "ATTACCANO") -> void:
-	for c in box_banner.get_children():
+	for c in box_scontro.get_children():
 		c.queue_free()
-	box_banner.add_child(_schieramento_banner(pa, att, "attacco %d" % forza_a))
-	var mezzo := VBoxContainer.new()
-	mezzo.alignment = BoxContainer.ALIGNMENT_CENTER
-	var spade := ZTema.etichetta("VS", 34, ZTema.OCRA, ZTema.titolo)
-	spade.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	mezzo.add_child(spade)
-	var verbo := ZTema.etichetta(tipo, 11, Color(ZTema.AVORIO, 0.7), ZTema.testo_forte)
-	verbo.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	mezzo.add_child(verbo)
-	box_banner.add_child(mezzo)
-	box_banner.add_child(_schieramento_banner(pd, dif, ("difesa %d" % forza_d) if forza_d >= 0 else "guarnigione coperta"))
-	banner.visible = true
-	banner.reset_size()
-	# In alto a sinistra sul tavolo: la ruota entra invece da destra.
-	banner.set_anchors_preset(Control.PRESET_TOP_LEFT)
-	banner.position = Vector2(16, 70)
-	banner.modulate.a = 0.0
-	banner.create_tween().tween_property(banner, "modulate:a", 1.0, 0.2)
+	var v := VBoxContainer.new()
+	v.add_theme_constant_override("separation", 6)
+	var intest := ZTema.etichetta(tipo, 12, ZTema.OCRA, ZTema.testo_forte)
+	intest.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	v.add_child(intest)
+	var h := HBoxContainer.new()
+	h.add_theme_constant_override("separation", 8)
+	var sa := _schieramento_banner(pa, att, "attacco %d" % forza_a)
+	sa.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	h.add_child(sa)
+	var vs := ZTema.etichetta("VS", 30, ZTema.OCRA, ZTema.titolo)
+	vs.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	h.add_child(vs)
+	var sd := _schieramento_banner(pd, dif, ("difesa %d" % forza_d) if forza_d >= 0 else "guarnigione coperta")
+	sd.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	h.add_child(sd)
+	v.add_child(h)
+	box_scontro.add_child(v)
+	box_scontro.visible = true
+	scroll_selezione.visible = false
 
 func nascondi_banner() -> void:
-	if banner.visible:
-		var tw := banner.create_tween()
-		tw.tween_property(banner, "modulate:a", 0.0, 0.25)
-		tw.tween_callback(func(): banner.visible = false)
+	box_scontro.visible = false
+	scroll_selezione.visible = true
 
 # --- La ruota originale -------------------------------------------------------------
 
 func _pannello_ruota() -> void:
 	pannello_ruota = PanelContainer.new()
-	pannello_ruota.add_theme_stylebox_override("panel", ZTema.riquadro(Color(ZTema.CUOIO_SCURO, 0.0), Color(0, 0, 0, 0), 0, 0, 0))
+	pannello_ruota.add_theme_stylebox_override("panel", StyleBoxEmpty.new())
 	pannello_ruota.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	radice.add_child(pannello_ruota)
-	var v := VBoxContainer.new()
-	v.add_theme_constant_override("separation", 0)
-	pannello_ruota.add_child(v)
-	ruota = ZRuota.new()
-	ruota.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	v.add_child(ruota)
+	# Dietro la barra di stato: la ruota ne esce come da sotto il tavolo.
+	radice.move_child(pannello_ruota, 0)
+	var h := HBoxContainer.new()
+	h.add_theme_constant_override("separation", 0)
+	h.alignment = BoxContainer.ALIGNMENT_END
+	pannello_ruota.add_child(h)
 	var didascalia := PanelContainer.new()
 	didascalia.add_theme_stylebox_override("panel", ZTema.riquadro(ZTema.CUOIO_SCURO, ZTema.OCRA, 2, 6, 12))
+	didascalia.size_flags_vertical = Control.SIZE_SHRINK_END
+	didascalia.custom_minimum_size = Vector2(250, 0)
 	var vd := VBoxContainer.new()
 	vd.add_theme_constant_override("separation", 2)
-	ruota_titolo = ZTema.etichetta("", 24, ZTema.AVORIO, ZTema.titolo)
-	ruota_titolo.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	ruota_titolo = ZTema.etichetta("", 22, ZTema.AVORIO, ZTema.titolo)
+	ruota_titolo.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	ruota_testo = ZTema.etichetta("", 13, Color(ZTema.AVORIO, 0.85))
-	ruota_testo.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	ruota_testo.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	vd.add_child(ruota_titolo)
 	vd.add_child(ruota_testo)
 	didascalia.add_child(vd)
-	v.add_child(didascalia)
+	h.add_child(didascalia)
+	ruota = ZRuota.new()
+	ruota.size_flags_vertical = Control.SIZE_SHRINK_END
+	h.add_child(ruota)
 	pannello_ruota.visible = false
 
-## La ruota entra dal lato destro del tavolo, gira fino al dado, evidenzia
-## l'esito e poi esce dallo stesso lato. Si attende con `await`.
+## La ruota sale da sotto la barra di stato, accanto a "fine mossa", gira fino
+## al dado, evidenzia l'esito e poi ridiscende. Si attende con `await`.
 func mostra_ruota(dado: int, fascia: int, titolo: String, testo: String, intro: String) -> void:
 	var vp := radice.size
-	ruota.scala = clampf((vp.y - 260.0) / (1024.0 * 0.53 + 140.0) * 0.95, 0.42, 0.55)
+	ruota.scala = clampf((vp.y - 330.0) / (1024.0 * 0.53), 0.42, 0.55)
 	ruota._ridimensiona()
 	ruota.rotazione = ruota.angolo_per_dado(randi_range(1, 6)) - 200.0
 	ruota.fascia_evidenziata = -1
@@ -339,13 +356,15 @@ func mostra_ruota(dado: int, fascia: int, titolo: String, testo: String, intro: 
 	ruota_testo.text = intro
 	pannello_ruota.visible = true
 	pannello_ruota.reset_size()
-	var w := ruota.size.x
-	pannello_ruota.size.x = w
-	var dentro := vp.x - LARGHEZZA_PANNELLO - 30.0 - w
-	var fuori := vp.x + 10.0
-	pannello_ruota.position = Vector2(fuori, 78)
+	var dim := pannello_ruota.get_combined_minimum_size()
+	pannello_ruota.size = dim
+	var destra := vp.x - LARGHEZZA_PANNELLO - 24.0
+	var alto_barra := vp.y - 64.0
+	var su := alto_barra - dim.y + 6.0
+	var giu := vp.y + 4.0
+	pannello_ruota.position = Vector2(destra - dim.x, giu)
 	var tw := create_tween()
-	tw.tween_property(pannello_ruota, "position:x", dentro, 0.38).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	tw.tween_property(pannello_ruota, "position:y", su, 0.4).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 	await tw.finished
 	ruota.gira(dado, fascia, 1.7)
 	await ruota.finita
@@ -353,7 +372,7 @@ func mostra_ruota(dado: int, fascia: int, titolo: String, testo: String, intro: 
 	ruota_testo.text = testo
 	await get_tree().create_timer(2.0).timeout
 	var tw2 := create_tween()
-	tw2.tween_property(pannello_ruota, "position:x", fuori, 0.34).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN)
+	tw2.tween_property(pannello_ruota, "position:y", giu, 0.32).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN)
 	await tw2.finished
 	pannello_ruota.visible = false
 

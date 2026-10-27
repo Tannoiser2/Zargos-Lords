@@ -38,8 +38,12 @@ func prossima_azione(g: ZPartita) -> Dictionary:
 			return {"a": "fine_schieramento"}
 		ZPartita.FASE_ALLEANZE:
 			return _alleanze(g)
+		ZPartita.FASE_SINGOLI:
+			return _singoli(g)
 		ZPartita.FASE_MOVIMENTO:
 			return _movimento(g)
+		ZPartita.FASE_LANCI:
+			return _lanci(g)
 		ZPartita.FASE_COMBATTIMENTO:
 			return _combattimento(g)
 	return {}
@@ -140,8 +144,12 @@ func _movimento(g: ZPartita) -> Dictionary:
 					bv = v
 					best = h
 			return {"a": "ricompari", "u": u.id, "h": [best.x, best.y]}
-	# 2. Attacchi singoli di Alati, Falchi e Serpenti.
-	if g.singoli_aperti:
+	return _movimento_ordinario(g)
+
+func _singoli(g: ZPartita) -> Dictionary:
+	var io := g.popolo_di_mano()
+	# Attacchi singoli di Alati, Falchi e Serpenti.
+	if true:
 		var miglior := {}
 		var mv := 0.6
 		for u in g.pedine:
@@ -171,14 +179,18 @@ func _movimento(g: ZPartita) -> Dictionary:
 		if not miglior.is_empty():
 			_fatti[1000 + int(miglior.u)] = true
 			return miglior
-	# 3. Draghi che fiammeggiano prima di muovere.
+	# Draghi che fiammeggiano prima di muovere.
 	for u in g.pedine:
 		if u.popolo == io and u.tipo == "signore" and io == "Draghi" and u.in_campo() and not u.mosso and not u.agito and not _fatti.has(2000 + u.id):
 			_fatti[2000 + u.id] = true
 			var t := _miglior_bersaglio_tiro(g, u)
 			if not t.is_empty():
 				return t
-	# 4. Movimento ordinario, dai pezzi più vicini al fronte.
+	return {"a": "fase"}
+
+func _movimento_ordinario(g: ZPartita) -> Dictionary:
+	var io := g.popolo_di_mano()
+	# Movimento ordinario, dai pezzi più vicini al fronte.
 	var candidati: Array[ZPedina] = []
 	for u in g.pedine:
 		if u.popolo != io or _fatti.has(u.id) or not u.viva or u.scomparso or u.scortato_da >= 0:
@@ -277,15 +289,22 @@ func _miglior_bersaglio_tiro(g: ZPartita, u: ZPedina) -> Dictionary:
 			best = {"a": "tiro", "u": u.id, "b": b.id}
 	return best
 
+func _lanci(g: ZPartita) -> Dictionary:
+	var io := g.popolo_di_mano()
+	for u in g.pedine:
+		if u.popolo == io and not _fatti.has(3000 + u.id) and g.tipo_tiro(u) != "" and not u.agito and u.viva and not u.scomparso:
+			_fatti[3000 + u.id] = true
+			# Maghi, Illusionisti e Drago possono anche combattere: tirano solo
+			# se non hanno un nemico adiacente da attaccare.
+			if g.puo_attaccare(u) == "" and g.in_zona_nemica(u.hex, io):
+				continue
+			var t := _miglior_bersaglio_tiro(g, u)
+			if not t.is_empty():
+				return t
+	return {"a": "fase"}
+
 func _combattimento(g: ZPartita) -> Dictionary:
 	var io := g.popolo_di_mano()
-	if not g.mischia_iniziata:
-		for u in g.pedine:
-			if u.popolo == io and not _fatti.has(3000 + u.id) and g.tipo_tiro(u) != "" and not u.agito and u.viva and not u.scomparso:
-				_fatti[3000 + u.id] = true
-				var t := _miglior_bersaglio_tiro(g, u)
-				if not t.is_empty():
-					return t
 	# Assedi.
 	for ci in g.citta:
 		if ci.h[0] < 0 or not g.nemici(ci.p, io) or _fatti.has(5000 + int(ci.id)):

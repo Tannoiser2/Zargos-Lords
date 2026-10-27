@@ -262,7 +262,10 @@ func _presenta_scontro(e: Dictionary) -> void:
 		var punto := tavolo.mondo(hd[0])
 		if con_ruota:
 			# La ruota occupa la destra: lo scontro si sposta nella metà sinistra.
-			punto += tavolo.camera.global_transform.basis.x * dist * 0.3
+			# La ruota sale in basso a destra: lo scontro va in alto a sinistra.
+			var destra := tavolo.camera.global_transform.basis.x
+			var avanti := Vector3(destra.z, 0, -destra.x)
+			punto += destra * dist * 0.18 - avanti * dist * 0.12
 		tavolo.inquadra(punto, dist)
 	var t_att: Array = []
 	for id in e.att:
@@ -448,10 +451,37 @@ func _clic(h: Vector2i, shift: bool) -> void:
 			sel_id = u.id if u else -1
 			citta_sel = int(ci.id) if not ci.is_empty() and u == null else -1
 			_aggiorna()
-		ZPartita.FASE_MOVIMENTO:
+		ZPartita.FASE_SINGOLI, ZPartita.FASE_MOVIMENTO:
 			_clic_movimento(h, u, ci, shift)
+		ZPartita.FASE_LANCI:
+			_clic_lanci(h, u, ci)
 		ZPartita.FASE_COMBATTIMENTO:
 			_clic_combattimento(h, u, ci, shift)
+
+## Fase dei lanci: si sceglie un tiratore, poi il bersaglio.
+func _clic_lanci(h: Vector2i, u: ZPedina, ci: Dictionary) -> void:
+	var p := partita.popolo_di_mano()
+	if u and u.popolo == p:
+		sel_id = u.id
+		citta_sel = -1
+		_aggiorna()
+		return
+	if u and partita.nemici(u.popolo, p) and sel_id >= 0:
+		var s := partita.pedine[sel_id]
+		if partita.tipo_tiro(s) == "":
+			_avviso("%s non lancia frecce, fiamme o visioni." % s.nome())
+			return
+		var v := partita.valuta_tiro(s, u)
+		if v.ok:
+			_applica({"a": "tiro", "u": s.id, "b": u.id})
+			sel_id = -1
+			_aggiorna()
+		else:
+			_avviso("%s: %s" % [s.nome(), v.errore])
+		return
+	sel_id = u.id if u else -1
+	citta_sel = int(ci.id) if not ci.is_empty() and u == null else -1
+	_aggiorna()
 
 func _clic_schieramento(h: Vector2i, u: ZPedina, ci: Dictionary) -> void:
 	var p := partita.popolo_di_mano()
@@ -539,6 +569,10 @@ func _clic_combattimento(h: Vector2i, u: ZPedina, ci: Dictionary, shift: bool) -
 	var p := partita.popolo_di_mano()
 	if u and u.popolo == p:
 		# Selezione degli attaccanti: un clic aggiunge o toglie dal gruppo.
+		var perche := partita.puo_attaccare(u)
+		if perche != "" and u.id not in gruppo:
+			_avviso("%s: %s" % [u.nome(), perche])
+			return
 		if u.id in gruppo:
 			gruppo.erase(u.id)
 			if sel_id == u.id:
@@ -550,8 +584,7 @@ func _clic_combattimento(h: Vector2i, u: ZPedina, ci: Dictionary, shift: bool) -
 		return
 	if u and partita.nemici(u.popolo, p):
 		citta_bersaglio = -1
-		# Un tiratore solo selezionato tira subito se il bersaglio è valido.
-		if gruppo.size() == 1:
+		if false:
 			var s := partita.pedine[gruppo[0]]
 			var tipo := partita.tipo_tiro(s)
 			var solo_tiro := tipo != "" and partita.puo_attaccare(s) != "" and not s.agito
@@ -663,12 +696,14 @@ func _aggiorna() -> void:
 			hud.lbl_fase.text = ""
 		_:
 			hud.lbl_turno.text = "MOSSA %s" % ZRegole.degli(p).to_upper()
-			var fasi := {"alleanze": "1 · ALLEANZE", "movimento": "2 · MOVIMENTO", "combattimento": "3 · COMBATTIMENTI"}
+			var fasi := {"alleanze": "1 · ALLEANZE", "singoli": "2 · ATTACCHI SINGOLI", "movimento": "3 · MOVIMENTO", "lanci": "4 · LANCI", "combattimento": "5 · CORPO A CORPO"}
 			hud.lbl_fase.text = "%s · %s" % [fasi.get(partita.fase, ""), chi.to_upper()]
 	match partita.fase:
 		ZPartita.FASE_SCHIERAMENTO: hud.btn_fase.text = "CONFERMA SCHIERAMENTO"
-		ZPartita.FASE_ALLEANZE: hud.btn_fase.text = "AL MOVIMENTO  ›"
-		ZPartita.FASE_MOVIMENTO: hud.btn_fase.text = "AI COMBATTIMENTI  ›"
+		ZPartita.FASE_ALLEANZE: hud.btn_fase.text = "AVANTI  ›"
+		ZPartita.FASE_SINGOLI: hud.btn_fase.text = "AL MOVIMENTO  ›"
+		ZPartita.FASE_MOVIMENTO: hud.btn_fase.text = "AI LANCI  ›"
+		ZPartita.FASE_LANCI: hud.btn_fase.text = "AL CORPO A CORPO  ›"
 		ZPartita.FASE_COMBATTIMENTO: hud.btn_fase.text = "FINE DELLA MOSSA  ›"
 		_: hud.btn_fase.text = "PARTITA FINITA"
 	hud.btn_fase.disabled = not _posso_agire()
@@ -731,17 +766,15 @@ func _scheda_pedina(u: ZPedina) -> Control:
 	var tipo_t := partita.tipo_tiro(u)
 	if tipo_t != "" and u.popolo == partita.popolo_di_mano() and _posso_agire() and not u.agito:
 		var guida := ""
-		var possibile := partita.fase == ZPartita.FASE_COMBATTIMENTO or (partita.fase == ZPartita.FASE_MOVIMENTO and u.popolo == "Draghi" and u.tipo == "signore" and not u.mosso)
+		var possibile := partita.fase == ZPartita.FASE_LANCI or (partita.fase == ZPartita.FASE_SINGOLI and u.popolo == "Draghi" and u.tipo == "signore" and not u.mosso)
 		if possibile:
 			var n := 0
 			for b in partita.pedine:
 				if partita.attaccabile(b) and partita.nemici(b.popolo, u.popolo) and partita.mappa.distanza(u.hex, b.hex) <= partita.gittata(u) and partita.valuta_tiro(u, b).ok:
 					n += 1
 			guida = ("Bersagli a tiro: %d (in arancione). Clicca un nemico per %s." % [n, {"frecce": "tirare", "fiamme": "lanciare le fiamme", "visione": "lanciare la visione"}[tipo_t]]) if n > 0 else "Nessun bersaglio valido a tiro da qui (gittata %d%s)." % [partita.gittata(u), ", in linea retta e senza ostacoli" if tipo_t == "frecce" else ""]
-			if partita.fase == ZPartita.FASE_COMBATTIMENTO and partita.mischia_iniziata:
-				guida = "I tiri vanno fatti prima degli scontri: in questa mossa è già avvenuto uno scontro."
 		elif partita.fase == ZPartita.FASE_MOVIMENTO:
-			guida = "Si tira nella fase di combattimento: prima avvicinalo, poi passa ai combattimenti."
+			guida = "Lancerà nella fase dei lanci, subito dopo il movimento."
 		if guida != "":
 			var lg := ZTema.etichetta(guida, 12, ZTema.VERDE.darkened(0.3), ZTema.testo_forte)
 			lg.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -757,7 +790,7 @@ func _scheda_pedina(u: ZPedina) -> Control:
 		stato.append("paralizzato nel gorgo (%d)" % u.paralisi)
 	if u.scomparso:
 		stato.append("scomparso")
-	if u.popolo == partita.popolo_di_mano() and partita.fase in [ZPartita.FASE_MOVIMENTO, ZPartita.FASE_COMBATTIMENTO]:
+	if u.popolo == partita.popolo_di_mano() and partita.fase in [ZPartita.FASE_SINGOLI, ZPartita.FASE_MOVIMENTO, ZPartita.FASE_LANCI, ZPartita.FASE_COMBATTIMENTO]:
 		if u.mosso:
 			stato.append("ha mosso")
 		if u.agito:
@@ -953,24 +986,6 @@ func _pannello_scontro(box: VBoxContainer) -> void:
 		_deseleziona(), 20)
 	b.disabled = not val.ok
 	bott.add_child(b)
-	# Mago, Illusionista e Drago possono in alternativa tirare.
-	if att.size() == 1 and difensori.size() == 1:
-		var s := partita.pedine[att[0]]
-		var tipo := partita.tipo_tiro(s)
-		if tipo != "":
-			var vt := partita.valuta_tiro(s, partita.pedine[difensori[0]])
-			var nome: String = {"visione": "Lancia visione", "fiamme": "Lancia fiamme", "frecce": "Tira frecce"}[tipo]
-			var bt := ZTema.pulsante(nome, func():
-				_applica({"a": "tiro", "u": s.id, "b": difensori[0]})
-				_deseleziona(), 15)
-			bt.disabled = not vt.ok
-			if not vt.ok:
-				bt.tooltip_text = vt.errore
-			bott.add_child(bt)
-			if not vt.ok:
-				var perche := ZTema.etichetta("%s: %s" % [nome, vt.errore], 12, ZTema.ROSSO, ZTema.testo_forte)
-				perche.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-				box.add_child(perche)
 	box.add_child(bott)
 	var tip := ZTema.etichetta("Clic sui tuoi pezzi per aggiungerli o toglierli; Maiusc+clic per attaccare più nemici con un solo pezzo.", 11, Color(ZTema.INCHIOSTRO, 0.6))
 	tip.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -1043,12 +1058,16 @@ func _aggiorna_evidenziazioni() -> void:
 						zone.append(h)
 						colori[h] = Color(1, 0.95, 0.75, 0.2)
 			tavolo.evidenzia("schieramento", zone, colori)
-		ZPartita.FASE_MOVIMENTO:
+		ZPartita.FASE_SINGOLI, ZPartita.FASE_MOVIMENTO:
 			if sel_id < 0:
-				# Suggerisce i pezzi che possono ancora muovere.
+				# Suggerisce i pezzi che possono agire in questa fase.
 				var liberi: Array = []
 				for u in partita.pedine:
-					if u.popolo == p and u.in_campo() and partita.puo_muovere(u) == "" and u.scortato_da < 0:
+					if u.popolo != p or not u.in_campo() or u.scortato_da >= 0:
+						continue
+					if partita.fase == ZPartita.FASE_MOVIMENTO and partita.puo_muovere(u) == "":
+						liberi.append(u.hex)
+					elif partita.fase == ZPartita.FASE_SINGOLI and (partita.puo_attacco_singolo(u) == "" or partita.puo_muovere(u) == "" or (u.popolo == "Draghi" and u.tipo == "signore" and not u.agito)):
 						liberi.append(u.hex)
 				tavolo.evidenzia("gruppo", liberi, Color(1, 0.95, 0.75, 0.3))
 				return
@@ -1068,6 +1087,20 @@ func _aggiorna_evidenziazioni() -> void:
 						if not partita.basi_attacco_singolo(s, b).is_empty() or (partita.tipo_tiro(s) == "fiamme" and partita.valuta_tiro(s, b).ok):
 							bersagli.append(b.hex)
 			tavolo.evidenzia("bersagli", bersagli, Color(0.85, 0.15, 0.1, 0.55))
+		ZPartita.FASE_LANCI:
+			var tiratori: Array = []
+			for u in partita.pedine:
+				if u.popolo == p and u.viva and not u.scomparso and partita.tipo_tiro(u) != "" and not u.agito and u.scortato_da < 0:
+					tiratori.append(u.hex)
+			tavolo.evidenzia("gruppo", tiratori, Color(1, 0.95, 0.75, 0.3))
+			if sel_id >= 0:
+				var s := partita.pedine[sel_id]
+				if s.popolo == p and partita.tipo_tiro(s) != "":
+					var bersagli: Array = []
+					for b in partita.pedine:
+						if partita.attaccabile(b) and partita.nemici(b.popolo, p) and partita.mappa.distanza(s.hex, b.hex) <= partita.gittata(s) and partita.valuta_tiro(s, b).ok:
+							bersagli.append(b.hex)
+					tavolo.evidenzia("bersagli", bersagli, Color(0.95, 0.5, 0.1, 0.55))
 		ZPartita.FASE_COMBATTIMENTO:
 			var g_hex: Array = []
 			for id in gruppo:
@@ -1075,13 +1108,6 @@ func _aggiorna_evidenziazioni() -> void:
 			tavolo.seleziona_pedine(gruppo)
 			var bersagli: Array = []
 			var colori := {}
-			if gruppo.size() == 1:
-				var s := partita.pedine[gruppo[0]]
-				if partita.tipo_tiro(s) != "" and not s.agito:
-					for b in partita.pedine:
-						if partita.attaccabile(b) and partita.nemici(b.popolo, p) and partita.mappa.distanza(s.hex, b.hex) <= partita.gittata(s) and partita.valuta_tiro(s, b).ok:
-							bersagli.append(b.hex)
-							colori[b.hex] = Color(0.95, 0.5, 0.1, 0.5)
 			for u in partita.pedine:
 				if partita.attaccabile(u) and partita.nemici(u.popolo, p) and not colori.has(u.hex):
 					for v in partita.mappa.vicino_geometrico_tutti(u.hex):
@@ -1102,7 +1128,7 @@ func _aggiorna_evidenziazioni() -> void:
 				tavolo.evidenzia("basi", [partita.hex_citta(partita.citta[citta_bersaglio])], Color(0.9, 0.05, 0.05, 0.7))
 			var pronti: Array = []
 			for u in partita.pedine:
-				if u.popolo == p and u.in_campo() and partita.puo_attaccare(u) == "" or (u.popolo == p and u.in_campo() and partita.tipo_tiro(u) != "" and not u.agito and not partita.mischia_iniziata):
+				if u.popolo == p and u.in_campo() and partita.puo_attaccare(u) == "" and partita.in_zona_nemica(u.hex, p):
 					pronti.append(u.hex)
 			tavolo.evidenzia("gruppo", pronti, Color(1, 0.85, 0.4, 0.18))
 
@@ -1119,15 +1145,16 @@ func _aggiorna_suggerimento() -> void:
 				t = "Schiera città, guarnigioni e armate sui tuoi continenti, poi conferma."
 			ZPartita.FASE_ALLEANZE:
 				t = "Proponi o tradisci alleanze nel pannello a destra, poi passa al movimento."
+			ZPartita.FASE_SINGOLI:
+				t = "Attacchi singoli, prima di ogni altro movimento: seleziona un Alato, un Falco o un Serpente e clicca un nemico in rosso. Il Signore Drago può fiammeggiare prima di muovere."
 			ZPartita.FASE_MOVIMENTO:
-				if partita.singoli_aperti:
-					t = "Prima gli attacchi singoli (Alati, Falchi, Serpenti: seleziona e clicca un nemico in rosso), poi muovi gli altri pezzi."
-				else:
-					t = "Seleziona un pezzo e clicca un esagono evidenziato; Maiusc+clic con un fante su un pezzo amico per fargli da scorta."
+				t = "Seleziona un pezzo e clicca un esagono evidenziato; Maiusc+clic con un fante su un pezzo amico per fargli da scorta."
 				if sel_id >= 0 and partita.pedine[sel_id].scomparso:
 					t = "Scegli dove far ricomparire il Signore Monaco."
+			ZPartita.FASE_LANCI:
+				t = "Lanci: seleziona un tiratore evidenziato (Fantarcieri, Lanciafiamme, Draghi, Maghi, Illusionisti) e clicca un bersaglio arancione. Maghi, Illusionisti e Draghi che lanciano non combattono più."
 			ZPartita.FASE_COMBATTIMENTO:
-				t = "Prima i tiri (seleziona un tiratore e clicca il bersaglio), poi gli scontri: scegli gli attaccanti e clicca il nemico o la città."
+				t = "Corpo a corpo: scegli gli attaccanti adiacenti e clicca il nemico o la città da attaccare."
 	hud.suggerimento.text = t
 
 # ---------------------------------------------------------------------------
@@ -1136,7 +1163,7 @@ func _aggiorna_suggerimento() -> void:
 
 const REGOLE := """[b]Scopo.[/b] L'Anno di Zargo dura 25 mesi: vince chi, alla fine, controlla più città, proprie o conquistate. Il numero di pezzi superstiti non conta.
 
-[b]La mossa.[/b] Ogni mese muovono, nell'ordine, Cavalieri, Draghi, Alati e Monaci. Ciascuno: 1) propone o tradisce alleanze (con 3-4 popoli), 2) muove tutti i pezzi che vuole, 3) risolve i tiri e poi gli scontri.
+[b]La mossa.[/b] Ogni mese muovono, nell'ordine, Cavalieri, Draghi, Alati e Monaci. Ciascuno: 1) propone o tradisce alleanze (con 3-4 popoli); 2) attacchi singoli di Alati, Falchi e Serpenti, prima di ogni altro movimento (il Signore Drago può anche fiammeggiare prima di muovere); 3) muove gli altri pezzi; 4) lanci: frecce, fiamme e visioni; 5) combattimenti corpo a corpo. Le fasi in cui non c'è nulla da fare vengono saltate.
 
 [b]Movimento.[/b] Il mare si attraversa solo sui ponti di nuvole. Un bosco costa 2 punti. Una montagna richiede un'intera mossa per salire. Un gorgo magico ferma e paralizza per tre mosse (e rende inattaccabili). Gli esagoni adiacenti a un nemico sono la sua zona d'influenza: ci si entra solo per attaccarlo.
 
