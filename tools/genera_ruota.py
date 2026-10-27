@@ -90,3 +90,30 @@ if __name__ == "__main__":
     disco("IMG_6185.jpg", (1521.0, 1512.0), 1510.0, "ruota_tiri_disco.png")
     coperchio("IMG_6187.jpg", (1520.0, 1507.5), 1.01, 0.0, 1488.0, 45, "ruota_tiri_coperchio.png")
     print("ruota generata")
+
+
+def allarga_finestra(nome, semi=6.2):
+    """Allarga la fessura verticale del cartoncino fino a ±semi gradi, così
+    le scritte lunghe (MAX-2, MAX-3…) si leggono per intero."""
+    im = np.asarray(Image.open(OUT / nome)).copy()
+    h, w = im.shape[:2]
+    yy, xx = np.mgrid[0:h, 0:w].astype(np.float32)
+    dx, dy = xx + 0.5 - LATO / 2, yy + 0.5 - LATO / 2
+    r = np.hypot(dx, dy) / SCALA
+    ang = np.degrees(np.arctan2(dy, dx)) + 90.0
+    aperto = im[..., 3] < 100
+    vicino = np.abs(ang) < 20
+    # raggi in cui la fessura esiste già
+    righe = np.round(r).astype(int)
+    con_fessura = np.zeros(int(r.max()) + 2, bool)
+    con_fessura[np.unique(righe[aperto & vicino])] = True
+    con_fessura = ndimage.binary_erosion(ndimage.binary_closing(con_fessura, iterations=20), iterations=6)
+    nuovo = vicino & (np.abs(ang) < semi) & con_fessura[righe]
+    nuovo = ndimage.gaussian_filter(nuovo.astype(np.float32), 0.8)
+    im[..., 3] = (im[..., 3] * (1.0 - nuovo)).astype(np.uint8)
+    Image.fromarray(im).save(OUT / nome, optimize=True)
+
+
+if __name__ == "__main__":
+    allarga_finestra("ruota_coperchio.png")
+    allarga_finestra("ruota_tiri_coperchio.png")
