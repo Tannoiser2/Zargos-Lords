@@ -118,12 +118,77 @@ static func percorso_faccia(p_popolo: String, t: String) -> String:
 	match t:
 		"retro": return "res://assets/units/retro.png"
 		"megadrago": return "res://assets/units/magia/megadrago.png"
-	return "res://assets/units/%s/%s.png" % [p_popolo.to_lower(), t]
+	return ZTema.percorso_pedina(p_popolo, t)
+
+# --- Miniature 3D ----------------------------------------------------------------
+
+const ALTEZZA_MODELLO := 0.26
+static var _modelli := {}   # percorso -> {"scena", "scala", "centro"}
+var _figura: Node3D
+var _figura_tipo := ""
+
+static func _dati_modello(percorso: String) -> Dictionary:
+	if _modelli.has(percorso):
+		return _modelli[percorso]
+	var scena: PackedScene = load(percorso)
+	var d := {"scena": scena, "scala": 1.0, "centro": Vector3.ZERO}
+	if scena:
+		var n := scena.instantiate()
+		var box := AABB()
+		var primo := true
+		for mi in n.find_children("*", "MeshInstance3D", true, false):
+			var m := mi as MeshInstance3D
+			var t := Transform3D.IDENTITY
+			var x: Node = m
+			while x != null and x != n:
+				if x is Node3D:
+					t = (x as Node3D).transform * t
+				x = x.get_parent()
+			var b := t * m.get_aabb()
+			box = b if primo else box.merge(b)
+			primo = false
+		n.free()
+		if not primo and box.size.y > 0.0:
+			var s := ALTEZZA_MODELLO / box.size.y
+			# Le figure larghe (ragno, serpente, cammello) non escono dall'esagono.
+			s = minf(s, RAGGIO * 2.6 / maxf(box.size.x, box.size.z))
+			d.scala = s
+			d.centro = Vector3(box.position.x + box.size.x * 0.5, box.position.y, box.position.z + box.size.z * 0.5)
+	_modelli[percorso] = d
+	return d
+
+## Mostra (o toglie) la miniatura sopra la pedina.
+func figura(t: String) -> void:
+	var percorso := ""
+	if ZTema.grafica == "3d" and t not in ["retro", "scomparso", "citta"]:
+		percorso = ZTema.percorso_modello(popolo, t)
+	if percorso == _figura_tipo:
+		return
+	_figura_tipo = percorso
+	if _figura:
+		_figura.queue_free()
+		_figura = null
+	if percorso == "":
+		return
+	var d := _dati_modello(percorso)
+	if d.scena == null:
+		return
+	_figura = Node3D.new()
+	var n: Node3D = d.scena.instantiate()
+	var sc: float = d.scala * (1.35 if t == "megadrago" else 1.0)
+	n.scale = Vector3.ONE * sc
+	n.position = -d.centro * sc
+	_figura.add_child(n)
+	_figura.position.y = SPESSORE
+	for mi in n.find_children("*", "MeshInstance3D", true, false):
+		(mi as MeshInstance3D).cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+	corpo.add_child(_figura)
 
 func _imposta_faccia(p_popolo: String, p_tipo: String) -> void:
 	popolo = p_popolo
 	_faccia_attuale = p_tipo
 	corpo.set_surface_override_material(0, materiale_faccia(percorso_faccia(p_popolo, p_tipo)))
+	figura(p_tipo)
 	corpo.set_surface_override_material(1, materiale_bordo(ZRegole.COLORI[p_popolo].darkened(0.35)))
 
 var _faccia_attuale := ""
@@ -132,6 +197,7 @@ func faccia(t: String) -> void:
 	if t != _faccia_attuale:
 		_faccia_attuale = t
 		corpo.set_surface_override_material(0, materiale_faccia(percorso_faccia(popolo, t)))
+		figura(t)
 
 func cambia_popolo(p: String) -> void:
 	if p != popolo:

@@ -8,6 +8,7 @@ signal continua
 signal crea_stanza(controllo: Dictionary, opzioni: Dictionary, url: String, chiave: String)
 signal entra_stanza(codice: String, url: String, chiave: String)
 signal regole
+signal grafica_cambiata(grafica: String)
 
 const SCELTE := ["Umano", "IA", "Escluso"]
 const SCELTE_ONLINE := ["Io", "Remoto", "IA", "Escluso"]
@@ -69,10 +70,14 @@ func _ready() -> void:
 	v.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	v.add_theme_constant_override("separation", 10)
 	scroll.add_child(v)
-	v.add_child(ZTema.titoletto("Scegli i Signori in campo", 26, ZTema.AVORIO))
-	var intro := ZTema.etichetta("Da due a quattro popoli. Venticinque mesi per conquistare più città degli altri.", 14, Color(ZTema.AVORIO, 0.7))
-	intro.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	v.add_child(intro)
+	var testa := HBoxContainer.new()
+	var tit := ZTema.titoletto("Scegli i Signori in campo", 26, ZTema.AVORIO)
+	tit.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	tit.tooltip_text = "Da due a quattro popoli. Venticinque mesi per conquistare più città degli altri."
+	tit.mouse_filter = Control.MOUSE_FILTER_PASS
+	testa.add_child(tit)
+	testa.add_child(_riga_grafica())
+	v.add_child(testa)
 	var griglia := GridContainer.new()
 	griglia.columns = 3
 	griglia.add_theme_constant_override("h_separation", 10)
@@ -116,7 +121,7 @@ func _scheda_popolo(p: String) -> Control:
 	h.add_theme_constant_override("separation", 6)
 	c.add_child(h)
 	var img := TextureRect.new()
-	img.texture = load("res://assets/ui/signori/%s.png" % p.to_lower())
+	img.texture = ZTema.ritratto_signore(p)
 	img.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	img.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	img.custom_minimum_size = Vector2(96, 150)
@@ -186,6 +191,26 @@ func _in_campo() -> Array:
 		if scelta.get(p, "Escluso") != "Escluso":
 			out.append(p)
 	return out
+
+var _gruppo_grafica: ButtonGroup
+func _riga_grafica() -> Control:
+	var h := HBoxContainer.new()
+	h.add_theme_constant_override("separation", 6)
+	h.add_child(ZTema.etichetta("Pedine:", 15, ZTema.AVORIO, ZTema.testo_forte))
+	_gruppo_grafica = ButtonGroup.new()
+	for g in [["originale", "Originali 1979"], ["nuova", "Nuova grafica"], ["3d", "Miniature 3D"]]:
+		var b := ZTema.pulsante(g[1], func(): _scegli_grafica(g[0]), 14)
+		b.toggle_mode = true
+		b.button_group = _gruppo_grafica
+		b.set_pressed_no_signal(ZTema.grafica == g[0])
+		h.add_child(b)
+	return h
+
+func _scegli_grafica(g: String) -> void:
+	ZTema.grafica = g
+	grafica_cambiata.emit(g)
+	for p in schede:
+		(schede[p].img as TextureRect).texture = ZTema.ritratto_signore(p)
 
 func _riga_opzioni() -> Control:
 	var c := PanelContainer.new()

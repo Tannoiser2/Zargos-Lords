@@ -31,6 +31,7 @@ var _ultimo_turno_visto := -1
 
 func _ready() -> void:
 	impostazioni.load(FILE_IMPOSTAZIONI)
+	ZTema.grafica = impostazioni.get_value("gioco", "grafica", "nuova")
 	tavolo = ZTavolo.new()
 	add_child(tavolo)
 	tavolo.esagono_cliccato.connect(_clic)
@@ -65,6 +66,7 @@ func _apri_menu() -> void:
 	menu.regole.connect(_mostra_regole_menu)
 	menu.crea_stanza.connect(_crea_stanza)
 	menu.entra_stanza.connect(_entra_stanza)
+	menu.grafica_cambiata.connect(func(g): _imposta("grafica", g))
 	hud.radice.visible = false
 
 func _nuova_partita(controllo: Dictionary, opzioni := {}) -> void:
@@ -112,12 +114,28 @@ func _imposta(chiave: String, valore: String) -> void:
 	impostazioni.save(FILE_IMPOSTAZIONI)
 	if chiave == "mappa":
 		tavolo.usa_mappa(valore)
+	if chiave == "grafica":
+		ZTema.grafica = valore
+		if partita and menu == null:
+			# Le pedine si ricostruiscono con le nuove facce o miniature.
+			for x in tavolo.segnalini.values():
+				x.queue_free()
+			for x in tavolo.citta.values():
+				x.queue_free()
+			tavolo.segnalini.clear()
+			tavolo.citta.clear()
+			tavolo.sincronizza(partita, 0.0)
+			_aggiorna()
 
 func _menu_partita() -> void:
 	var ruota: bool = impostazioni.get_value("gioco", "risoluzione", "ruota") == "ruota"
 	var originale: bool = impostazioni.get_value("gioco", "mappa", "nuova") == "originale"
-	hud.apri_finestra("Menu", "La partita viene salvata automaticamente dopo ogni azione.\n\n[b]Scontri:[/b] %s\n[b]Mappa:[/b] %s" % [
-		"ruota originale" if ruota else "riquadro con la tabella", "originale del 1979" if originale else "nuova edizione (Tabletop Simulator)"], [
+	var grafica: String = ZTema.grafica
+	var nomi_grafica := {"originale": "originale del 1979", "nuova": "nuova", "3d": "miniature 3D"}
+	var prossima: String = {"originale": "nuova", "nuova": "3d", "3d": "originale"}[grafica]
+	hud.apri_finestra("Menu", "La partita viene salvata automaticamente dopo ogni azione.\n\n[b]Scontri:[/b] %s\n[b]Mappa:[/b] %s\n[b]Pedine:[/b] %s" % [
+		"ruota originale" if ruota else "riquadro con la tabella", "originale del 1979" if originale else "nuova edizione (Tabletop Simulator)", nomi_grafica[grafica]], [
+		["Pedine: " + nomi_grafica[prossima], func(): _imposta("grafica", prossima); _menu_partita()],
 		["Scontri: " + ("usa il riquadro" if ruota else "usa la ruota"), func(): _imposta("risoluzione", "riquadro" if ruota else "ruota"); _menu_partita()],
 		["Mappa: " + ("nuova" if originale else "originale"), func(): _imposta("mappa", "nuova" if originale else "originale"); _menu_partita()],
 		["Torna al gioco", Callable()],

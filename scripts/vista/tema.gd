@@ -131,5 +131,35 @@ static func pulsante_forte(testo_: String, azione: Callable = Callable(), dimens
 	b.add_theme_color_override("font_hover_color", Color.WHITE)
 	return b
 
+## Grafica delle pedine: "originale" (scansioni 1979), "nuova" o "3d"
+## (nuove facce più le miniature generate con Meshy).
+static var grafica := "nuova"
+
+static func percorso_pedina(popolo: String, tipo: String) -> String:
+	var orig := "res://assets/units/%s/%s.png" % [popolo.to_lower(), tipo]
+	if grafica != "originale":
+		var t := "pantera" if tipo == "pantera0" else tipo
+		var nuovo := "res://assets/units_nuove/%s/%s.png" % [popolo.to_lower(), t]
+		if ResourceLoader.exists(nuovo):
+			return nuovo
+	return orig
+
 static func texture_pedina(popolo: String, tipo: String) -> Texture2D:
-	return load("res://assets/units/%s/%s.png" % [popolo.to_lower(), tipo])
+	return load(percorso_pedina(popolo, tipo))
+
+## Disegno del Signore per il menu, coerente con la grafica scelta.
+static func ritratto_signore(popolo: String) -> Texture2D:
+	var p := popolo.to_lower()
+	var cartelle := {"originale": ["signori"], "nuova": ["signori_nuovi", "signori"], "3d": ["signori_3d", "signori_nuovi", "signori"]}
+	for c in cartelle.get(grafica, ["signori"]):
+		var f := "res://assets/ui/%s/%s.png" % [c, p]
+		if ResourceLoader.exists(f):
+			return load(f)
+	return null
+
+## Miniatura 3D del pezzo, se esiste.
+static func percorso_modello(popolo: String, tipo: String) -> String:
+	var mappa_tipi := {"pantera0": "pantera", "megadrago": "signore"}
+	var pp := "draghi" if tipo == "megadrago" else popolo.to_lower()
+	var f := "res://assets/modelli/%s/%s.glb" % [pp, mappa_tipi.get(tipo, tipo)]
+	return f if ResourceLoader.exists(f) else ""

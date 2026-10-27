@@ -58,6 +58,14 @@ Pubblicazione: https://tannoiser2.github.io/Zargos-Lords/
 
 Accanto al disegno di ogni Signore si sceglie chi guida il popolo: *Umano*, *IA* o *Escluso* (online: *Io*, *Remoto*, *IA*, *Escluso*). Al massimo quattro popoli in campo. Sotto si attivano le regole di Zargo's Lords 2 e le opzioni magia, passaggi segreti e guerra lampo. I disegni dei Signori sono ritagliati da `tools/genera_signori.py`.
 
+## Grafica delle pedine
+
+Si sceglie nel menu iniziale (in alto a destra) o dal menu in partita; anche i ritratti dei Signori nel menu cambiano di conseguenza.
+
+- **Originali 1979**: le scansioni dei fogli di pedine (`assets/units`).
+- **Nuova grafica**: le nuove illustrazioni in `docs/nuova_grafica`, riportate su esagoni a punta in alto con il bordo del colore del popolo da `tools/genera_pedine_nuove.py` (`assets/units_nuove`).
+- **Miniature 3D**: 25 modelli generati con Meshy (image-to-3D, topologia leggera da 8000 triangoli, texture ridotte a 1024 px) a partire dalle nuove illustrazioni, in piedi sulle pedine (`assets/modelli/<popolo>/<tipo>.glb`). Città, segnalino di sparizione e pezzi ridotti restano pedine piatte; la Pantera nata da un fante usa la stessa miniatura della Pantera, il Mega drago quella del Signore Drago ingrandita. Gli ID dei task Meshy sono in `docs/nuova_grafica/meshy_task.txt`.
+
 ## Opzioni (menu in partita)
 
 - **Scontri**: *ruota originale* oppure *riquadro*. Con la ruota, il disco fotografato dalla scatola gira sotto il cartoncino del calendario, si ferma sul dado ed evidenzia la fascia della differenza. La ruota si usa per gli scontri che coinvolgono un giocatore umano; quelli fra IA usano il riquadro, più rapido. Le texture sono generate da `tools/genera_ruota.py`.
