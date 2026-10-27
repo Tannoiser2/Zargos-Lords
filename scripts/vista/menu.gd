@@ -42,14 +42,14 @@ func _ready() -> void:
 	# A sinistra i quattro Signori del 1979 (illustrazione di Casolari) sotto il nome del gioco.
 	var sinistra := VBoxContainer.new()
 	sinistra.anchor_bottom = 1.0
-	sinistra.anchor_right = 0.36
+	sinistra.anchor_right = 0.43
 	sinistra.offset_left = 28
 	sinistra.offset_top = 22
 	sinistra.offset_bottom = -20
 	sinistra.offset_right = -8
 	sinistra.add_theme_constant_override("separation", 0)
 	radice.add_child(sinistra)
-	var logo := ZTema.etichetta("ZARGO'S LORDS", 64, ZTema.AVORIO, ZTema.titolo)
+	var logo := ZTema.etichetta("ZARGO'S LORDS", 56, ZTema.AVORIO, ZTema.titolo)
 	logo.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	sinistra.add_child(logo)
 	var motto := ZTema.etichetta("duelli magici per il potere mondiale", 16, ZTema.TERRA_ROSA, ZTema.testo_forte)
@@ -63,7 +63,7 @@ func _ready() -> void:
 	sinistra.add_child(illustrazione)
 	# Colonna destra; lo scorrimento resta solo come riserva per finestre minuscole.
 	var scroll := ScrollContainer.new()
-	scroll.anchor_left = 0.36
+	scroll.anchor_left = 0.43
 	scroll.anchor_right = 1.0
 	scroll.anchor_bottom = 1.0
 	scroll.offset_left = 20
@@ -84,13 +84,18 @@ func _ready() -> void:
 	testa.add_child(tit)
 	testa.add_child(_riga_grafica())
 	v.add_child(testa)
-	var griglia := GridContainer.new()
-	griglia.columns = 3
-	griglia.add_theme_constant_override("h_separation", 10)
-	griglia.add_theme_constant_override("v_separation", 10)
-	for p in ZRegole.POPOLI_ZL2:
-		griglia.add_child(_scheda_popolo(p))
-	v.add_child(griglia)
+	# Gioco base sopra, espansione sotto, su due colonne.
+	for gruppo in [ZRegole.POPOLI_ZL2.filter(func(x): return not x in ESPANSIONE), ESPANSIONE]:
+		var griglia := GridContainer.new()
+		griglia.columns = 2
+		griglia.add_theme_constant_override("h_separation", 10)
+		griglia.add_theme_constant_override("v_separation", 8)
+		for p in gruppo:
+			griglia.add_child(_scheda_popolo(p))
+		if gruppo == ESPANSIONE:
+			var t := ZTema.etichetta("ZARGO'S LORDS 2", 14, ZTema.OCRA, ZTema.titolo)
+			v.add_child(t)
+		v.add_child(griglia)
 	v.add_child(_riga_opzioni())
 	# Azioni principali.
 	var azioni := HBoxContainer.new()
@@ -130,22 +135,19 @@ func _scheda_popolo(p: String) -> Control:
 	img.texture = ZTema.ritratto_signore(p)
 	img.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	img.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	img.custom_minimum_size = Vector2(96, 150)
+	img.custom_minimum_size = Vector2(96, 120)
 	img.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	h.add_child(img)
 	var col := VBoxContainer.new()
 	col.add_theme_constant_override("separation", 4)
-	col.custom_minimum_size = Vector2(104, 0)
+	col.custom_minimum_size = Vector2(230, 0)
 	col.alignment = BoxContainer.ALIGNMENT_CENTER
 	var nome := ZTema.titoletto(p, 21, ZRegole.COLORI[p].darkened(0.5))
 	nome.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	col.add_child(nome)
-	if p in ESPANSIONE:
-		var tag := ZTema.etichetta("Zargo's Lords 2", 11, ZTema.CUOIO_CHIARO, ZTema.testo_forte)
-		tag.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		col.add_child(tag)
-	var box := VBoxContainer.new()
-	box.add_theme_constant_override("separation", 3)
+	var box := GridContainer.new()
+	box.add_theme_constant_override("h_separation", 4)
+	box.add_theme_constant_override("v_separation", 4)
 	col.add_child(box)
 	h.add_child(col)
 	schede[p] = {"pannello": c, "img": img, "box": box}
@@ -153,16 +155,18 @@ func _scheda_popolo(p: String) -> Control:
 	return c
 
 func _crea_pulsanti(p: String) -> void:
-	var box: VBoxContainer = schede[p].box
+	var box: GridContainer = schede[p].box
 	for f in box.get_children():
 		f.queue_free()
+	box.columns = 2 if online_attivo else 3
 	var gruppo := ButtonGroup.new()
 	schede[p].gruppo = gruppo
 	for s in (SCELTE_ONLINE if online_attivo else SCELTE):
 		var b := ZTema.pulsante(s, Callable(), 14)
 		b.toggle_mode = true
 		b.button_group = gruppo
-		b.custom_minimum_size = Vector2(0, 28)
+		b.custom_minimum_size = Vector2(0, 30)
+		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		b.pressed.connect(_scegli.bind(p, s))
 		box.add_child(b)
 
@@ -180,7 +184,7 @@ func _scegli(p: String, s: String) -> void:
 
 func _imposta(p: String, s: String) -> void:
 	scelta[p] = s
-	var box: VBoxContainer = schede[p].box
+	var box: GridContainer = schede[p].box
 	for b in box.get_children():
 		if b is Button and not b.is_queued_for_deletion():
 			b.set_pressed_no_signal(b.text == s)

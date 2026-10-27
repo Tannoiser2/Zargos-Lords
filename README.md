@@ -60,7 +60,7 @@ Pubblicazione: https://tannoiser2.github.io/Zargos-Lords/
 
 ## Menu iniziale
 
-Accanto al disegno di ogni Signore si sceglie chi guida il popolo: *Umano*, *IA* o *Escluso* (online: *Io*, *Remoto*, *IA*, *Escluso*). Al massimo quattro popoli in campo. Sotto si attivano le regole di Zargo's Lords 2 e le opzioni magia, passaggi segreti e guerra lampo. I disegni dei Signori sono ritagliati da `tools/genera_signori.py`.
+Accanto al disegno di ogni Signore (popoli del gioco base sopra, dell espansione sotto, su due colonne) si sceglie chi guida il popolo: *Umano*, *IA* o *Escluso* (online: *Io*, *Remoto*, *IA*, *Escluso*). Al massimo quattro popoli in campo. Sotto si attivano le regole di Zargo's Lords 2 e le opzioni magia, passaggi segreti e guerra lampo. I disegni dei Signori sono ritagliati da `tools/genera_signori.py`.
 
 ## Grafica delle pedine
 
