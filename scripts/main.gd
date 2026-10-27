@@ -14,6 +14,8 @@ var in_online := false
 var sono_host := false
 var posti := {}             # popolo -> uid | "ia"
 var _attesa_pubblicazione := false
+var impostazioni := ConfigFile.new()
+const FILE_IMPOSTAZIONI := "user://impostazioni.cfg"
 
 var sel_id := -1            # pedina selezionata
 var citta_sel := -1         # città selezionata
@@ -24,6 +26,7 @@ var ia_in_corso := false
 var _ultimo_turno_visto := -1
 
 func _ready() -> void:
+	impostazioni.load(FILE_IMPOSTAZIONI)
 	tavolo = ZTavolo.new()
 	add_child(tavolo)
 	tavolo.esagono_cliccato.connect(_clic)
@@ -88,6 +91,7 @@ func _avvia_vista() -> void:
 	tavolo.citta.clear()
 	hud.radice.visible = true
 	_deseleziona()
+	tavolo.usa_mappa(impostazioni.get_value("gioco", "mappa", "nuova"))
 	tavolo.sincronizza(partita, 0.0)
 	_inquadra_popolo(partita.popolo_di_mano())
 	_aggiorna()
@@ -99,14 +103,25 @@ func _salva() -> void:
 	if f:
 		f.store_string(JSON.stringify(partita.a_dict()))
 
+func _imposta(chiave: String, valore: String) -> void:
+	impostazioni.set_value("gioco", chiave, valore)
+	impostazioni.save(FILE_IMPOSTAZIONI)
+	if chiave == "mappa":
+		tavolo.usa_mappa(valore)
+
 func _menu_partita() -> void:
-	hud.apri_finestra("Menu", "La partita viene salvata automaticamente dopo ogni azione.", [
+	var ruota: bool = impostazioni.get_value("gioco", "risoluzione", "ruota") == "ruota"
+	var originale: bool = impostazioni.get_value("gioco", "mappa", "nuova") == "originale"
+	hud.apri_finestra("Menu", "La partita viene salvata automaticamente dopo ogni azione.\n\n[b]Scontri:[/b] %s\n[b]Mappa:[/b] %s" % [
+		"ruota originale" if ruota else "riquadro con la tabella", "originale del 1979" if originale else "nuova edizione (Tabletop Simulator)"], [
+		["Scontri: " + ("usa il riquadro" if ruota else "usa la ruota"), func(): _imposta("risoluzione", "riquadro" if ruota else "ruota"); _menu_partita()],
+		["Mappa: " + ("nuova" if originale else "originale"), func(): _imposta("mappa", "nuova" if originale else "originale"); _menu_partita()],
 		["Torna al gioco", Callable()],
 		["Esci al menu principale", func():
 			if in_online:
 				online.stop_polling()
 			_apri_menu()],
-	], 420)
+	], 720)
 
 # ---------------------------------------------------------------------------
 # Chi controlla cosa
@@ -125,7 +140,7 @@ func _ia_locale(p: String) -> bool:
 	return not in_online or sono_host
 
 func _posso_agire() -> bool:
-	return partita != null and not ia_in_corso and _mio(partita.popolo_di_mano()) and partita.fase != ZPartita.FASE_FINITA
+	return partita != null and not ia_in_corso and not presentando and _mio(partita.popolo_di_mano()) and partita.fase != ZPartita.FASE_FINITA
 
 func _process(_delta: float) -> void:
 	if partita == null or menu != null:
@@ -149,10 +164,12 @@ func _turno_ia() -> void:
 		if not r.ok:
 			ia.scarta(az)
 			continue
+		if presentando:
+			await presentazione_finita
 		var pausa := 0.12
 		for e in r.eventi:
 			if e.t in ["combattimento", "tiro"]:
-				pausa = 1.3
+				pausa = 0.4
 			elif e.t == "conquista":
 				pausa = maxf(pausa, 1.0)
 			elif e.t == "turno":
@@ -175,20 +192,118 @@ func _applica(az: Dictionary) -> Dictionary:
 		if not ia_in_corso:
 			_avviso(r.errore)
 		return r
-	for e in r.eventi:
-		_effetto(e)
 	# Proposte d'alleanza dirette a un popolo guidato dall'IA: risponde subito.
 	for k in partita.proposte.duplicate():
 		var parti: PackedStringArray = k.split(">")
 		if _ia_locale(parti[1]):
 			partita.esegui({"a": "rispondi", "da": parti[0], "a2": parti[1], "si": ZIA.accetta_alleanza(partita, parti[0], parti[1])})
-	tavolo.sincronizza(partita)
+	_coda.append_array(r.eventi)
+	if not presentando:
+		_presenta_coda()
 	_controlla_proposte()
 	_aggiorna()
 	_salva()
 	if in_online:
 		_pubblica()
 	return r
+
+# --- Messa in scena degli eventi ---------------------------------------------------
+# Lo stato della partita è già aggiornato quando arrivano gli eventi: il tavolo
+# resta fermo finché ogni scontro non è stato mostrato, poi si allinea.
+
+var _coda: Array = []
+var presentando := false
+signal presentazione_finita
+
+func _presenta_coda() -> void:
+	presentando = true
+	_aggiorna()
+	while not _coda.is_empty():
+		var e: Dictionary = _coda.pop_front()
+		match e.t:
+			"combattimento":
+				await _presenta_scontro(e)
+			"tiro":
+				_effetto(e)
+				await get_tree().create_timer(0.5).timeout
+			"muovi", "ritira":
+				tavolo.sposta(int(e.u), Vector2i(int(e.a[0]), int(e.a[1])), 0.3 if e.t == "muovi" else 0.4)
+				if e.t == "ritira":
+					await get_tree().create_timer(0.25).timeout
+			"elimina":
+				tavolo.elimina(int(e.u))
+				await get_tree().create_timer(0.2).timeout
+			_:
+				_effetto(e)
+	tavolo.pulisci_scontro()
+	hud.nascondi_banner()
+	tavolo.sincronizza(partita)
+	presentando = false
+	_aggiorna()
+	presentazione_finita.emit()
+
+## Scontro ben visibile: frecce sul tavolo, fascia con i due schieramenti,
+## poi la ruota originale (o il riquadro, a scelta) con l'esito.
+func _presenta_scontro(e: Dictionary) -> void:
+	var ha: Array[Vector2i] = []
+	for x in e.get("ha", []):
+		ha.append(Vector2i(int(x[0]), int(x[1])))
+	var hd: Array[Vector2i] = []
+	for x in e.get("hd", []):
+		hd.append(Vector2i(int(x[0]), int(x[1])))
+	var pa: String = e.get("pa", partita.pedine[int(e.att[0])].popolo)
+	var pd: String = e.get("pd", "")
+	var citta := e.has("citta")
+	var coinvolge_umano := _umano_locale(pa) or _umano_locale(pd)
+	tavolo.mostra_scontro(ha, hd, ZTema.OCRA, Color(0.95, 0.15, 0.1))
+	var con_ruota: bool = int(e.dado) > 0 and impostazioni.get_value("gioco", "risoluzione", "ruota") == "ruota" and coinvolge_umano
+	if not hd.is_empty():
+		var dist := minf(tavolo._distanza_obiettivo, 5.5)
+		var punto := tavolo.mondo(hd[0])
+		if con_ruota:
+			# La ruota occupa la destra: lo scontro si sposta nella metà sinistra.
+			punto += tavolo.camera.global_transform.basis.x * dist * 0.3
+		tavolo.inquadra(punto, dist)
+	var t_att: Array = []
+	for id in e.att:
+		var u := partita.pedine[int(id)]
+		t_att.append(ZTema.texture_pedina(u.popolo, u.tipo))
+	var t_dif: Array = []
+	if citta:
+		t_dif.append(ZTema.texture_pedina(pd, "citta"))
+	else:
+		for id in e.dif:
+			var u := partita.pedine[int(id)]
+			t_dif.append(ZTema.texture_pedina(u.popolo, u.tipo))
+	var verbo := "ASSEDIANO" if citta else ("ATTACCO SINGOLO" if e.get("singolo", false) else "ATTACCANO")
+	hud.mostra_banner(pa, t_att, int(e.fa), pd, t_dif, int(e.fd) if not citta or int(e.dado) > 0 else -1, verbo)
+	var titolo := _frase_esito(e.esito, citta).to_upper()
+	var testo := "%d contro %d: differenza %+d, dado %d." % [e.fa, e.fd, e.diff, e.dado]
+	# Chi doveva arretrare ma non aveva via di fuga viene eliminato.
+	var morti := 0
+	for x in _coda:
+		if x.t == "elimina" and (int(x.u) in e.dif.map(func(v): return int(v)) or int(x.u) in e.att.map(func(v): return int(v))):
+			morti += 1
+	if morti > 0 and not e.esito.ends_with("E") and not citta:
+		testo += " Senza via di fuga: %d %s." % [morti, "pezzo eliminato" if morti == 1 else "pezzi eliminati"]
+		titolo = "%s: NESSUNA VIA DI FUGA" % ("DIFENSORE ELIMINATO" if e.esito.begins_with("D") else "ATTACCANTI ELIMINATI")
+	if int(e.dado) == 0:
+		titolo = "ASSEDIANTI TROPPO DEBOLI"
+		testo = "La guarnigione vale %d: con %d gli assedianti sono eliminati." % [e.fd, e.fa]
+	await get_tree().create_timer(0.9 if coinvolge_umano else 0.5).timeout
+	if con_ruota:
+		var fascia := ZRegole.fascia(int(e.diff))
+		await hud.mostra_ruota(int(e.dado), fascia, titolo, testo, "%s %s · differenza %+d" % [ZRegole.Gli(pa), verbo.to_lower(), e.diff])
+	else:
+		hud.mostra_dado(int(e.dado), titolo, testo, int(e.diff) if int(e.dado) > 0 else -999)
+		await get_tree().create_timer(1.6 if coinvolge_umano else 0.9).timeout
+	tavolo.pulisci_scontro()
+	hud.nascondi_banner()
+
+func _umano_locale(p: String) -> bool:
+	if p == "" or partita == null:
+		return false
+	return _mio(p) or (not in_online and partita.controllo.get(p, "") == "umano")
 
 func _frase_esito(e: String, citta := false) -> String:
 	if e == "AE":
@@ -203,7 +318,7 @@ func _frase_esito(e: String, citta := false) -> String:
 
 func _effetto(e: Dictionary) -> void:
 	match e.t:
-		"combattimento":
+		"combattimento_vecchio":
 			var dif_hex: Vector2i = partita.pedine[int(e.dif[0])].hex if not e.has("citta") else partita.hex_citta(partita.citta[int(e.citta)])
 			tavolo.lampo(dif_hex, Color(1, 0.4, 0.3))
 			var att: ZPedina = partita.pedine[int(e.att[0])]
@@ -439,11 +554,18 @@ func _clic_combattimento(h: Vector2i, u: ZPedina, ci: Dictionary, shift: bool) -
 		if gruppo.size() == 1:
 			var s := partita.pedine[gruppo[0]]
 			var tipo := partita.tipo_tiro(s)
+			var solo_tiro := tipo != "" and partita.puo_attaccare(s) != "" and not s.agito
 			if tipo != "" and partita.valuta_tiro(s, u).ok and (tipo == "frecce" or s.tipo == "lanciafiamme"):
 				_applica({"a": "tiro", "u": s.id, "b": u.id})
 				gruppo.clear()
 				sel_id = -1
 				_aggiorna()
+				return
+			if solo_tiro:
+				# Fantarcieri e Lanciafiamme non combattono in attacco: si spiega
+				# perché il tiro non è possibile invece di aprire uno scontro.
+				var v := partita.valuta_tiro(s, u)
+				_avviso("%s: %s" % [s.nome(), v.errore])
 				return
 		if shift and gruppo.size() == 1:
 			if u.id in difensori:
@@ -606,6 +728,24 @@ func _scheda_pedina(u: ZPedina) -> Control:
 		var l := ZTema.etichetta(d, 13)
 		l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		v.add_child(l)
+	var tipo_t := partita.tipo_tiro(u)
+	if tipo_t != "" and u.popolo == partita.popolo_di_mano() and _posso_agire() and not u.agito:
+		var guida := ""
+		var possibile := partita.fase == ZPartita.FASE_COMBATTIMENTO or (partita.fase == ZPartita.FASE_MOVIMENTO and u.popolo == "Draghi" and u.tipo == "signore" and not u.mosso)
+		if possibile:
+			var n := 0
+			for b in partita.pedine:
+				if partita.attaccabile(b) and partita.nemici(b.popolo, u.popolo) and partita.mappa.distanza(u.hex, b.hex) <= partita.gittata(u) and partita.valuta_tiro(u, b).ok:
+					n += 1
+			guida = ("Bersagli a tiro: %d (in arancione). Clicca un nemico per %s." % [n, {"frecce": "tirare", "fiamme": "lanciare le fiamme", "visione": "lanciare la visione"}[tipo_t]]) if n > 0 else "Nessun bersaglio valido a tiro da qui (gittata %d%s)." % [partita.gittata(u), ", in linea retta e senza ostacoli" if tipo_t == "frecce" else ""]
+			if partita.fase == ZPartita.FASE_COMBATTIMENTO and partita.mischia_iniziata:
+				guida = "I tiri vanno fatti prima degli scontri: in questa mossa è già avvenuto uno scontro."
+		elif partita.fase == ZPartita.FASE_MOVIMENTO:
+			guida = "Si tira nella fase di combattimento: prima avvicinalo, poi passa ai combattimenti."
+		if guida != "":
+			var lg := ZTema.etichetta(guida, 12, ZTema.VERDE.darkened(0.3), ZTema.testo_forte)
+			lg.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+			v.add_child(lg)
 	var stato: PackedStringArray = []
 	if u.citta >= 0:
 		stato.append("in guarnigione")
@@ -764,6 +904,17 @@ func _pannello_scontro(box: VBoxContainer) -> void:
 		box.add_child(b)
 		box.add_child(ZTema.pulsante("Annulla", _deseleziona, 14))
 		return
+	var esclusi: Array = []
+	if att.size() > 1:
+		for id in att.duplicate():
+			var w := partita.pedine[id]
+			if ZRegole.arciere(w.tipo) or w.tipo == "lanciafiamme":
+				att.erase(id)
+				esclusi.append(w.nome())
+	if not esclusi.is_empty():
+		var nota := ZTema.etichetta("Esclusi dallo scontro (in attacco possono solo tirare): " + ", ".join(esclusi), 12, ZTema.CUOIO, ZTema.testo_forte)
+		nota.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		box.add_child(nota)
 	var val := partita.valuta_attacco(att, difensori)
 	var col_a := HBoxContainer.new()
 	var va := VBoxContainer.new()
@@ -816,6 +967,10 @@ func _pannello_scontro(box: VBoxContainer) -> void:
 			if not vt.ok:
 				bt.tooltip_text = vt.errore
 			bott.add_child(bt)
+			if not vt.ok:
+				var perche := ZTema.etichetta("%s: %s" % [nome, vt.errore], 12, ZTema.ROSSO, ZTema.testo_forte)
+				perche.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+				box.add_child(perche)
 	box.add_child(bott)
 	var tip := ZTema.etichetta("Clic sui tuoi pezzi per aggiungerli o toglierli; Maiusc+clic per attaccare più nemici con un solo pezzo.", 11, Color(ZTema.INCHIOSTRO, 0.6))
 	tip.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -1082,7 +1237,7 @@ func _pubblica() -> void:
 	online.publish_snapshot(partita.a_dict())
 
 func _ricevi_stato(stato: Dictionary) -> void:
-	if partita == null or ia_in_corso:
+	if partita == null or ia_in_corso or presentando:
 		return
 	var prima := partita.a_dict()
 	partita.da_dict(stato)

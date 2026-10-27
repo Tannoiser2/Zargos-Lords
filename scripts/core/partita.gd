@@ -630,6 +630,8 @@ func _risolvi(att: Array[ZPedina], dif: Array[ZPedina], eventi: Array, singolo :
 		u.agito = true
 	eventi.append({
 		"t": "combattimento", "att": att.map(func(u): return u.id), "dif": dif.map(func(u): return u.id),
+		"ha": att.map(func(u): return [u.hex.x, u.hex.y]), "hd": dif.map(func(u): return [u.hex.x, u.hex.y]),
+		"pa": att[0].popolo, "pd": dif[0].popolo,
 		"fa": fa, "fd": fd, "diff": diff, "fascia": ZRegole.fascia(diff), "dado": dado, "esito": esito, "singolo": singolo,
 	})
 	_log("%s %s (%d) contro %s (%d): dado %d, differenza %d » %s" % [
@@ -718,13 +720,13 @@ func _assedio(att: Array[ZPedina], ci: Dictionary, eventi: Array) -> void:
 		u.agito = true
 	if ZRegole.fascia(diff) < 0:
 		_log("Assedianti troppo deboli contro la guarnigione (%d contro %d): eliminati." % [fa, fd])
-		eventi.append({"t": "combattimento", "att": att.map(func(u): return u.id), "dif": ci.g.duplicate(), "fa": fa, "fd": fd, "diff": diff, "fascia": -1, "dado": 0, "esito": "AE", "citta": ci.id})
+		eventi.append({"t": "combattimento", "att": att.map(func(u): return u.id), "dif": ci.g.duplicate(), "fa": fa, "fd": fd, "diff": diff, "fascia": -1, "dado": 0, "esito": "AE", "citta": ci.id, "ha": att.map(func(u): return [u.hex.x, u.hex.y]), "hd": [ci.h], "pa": att[0].popolo, "pd": ci.p})
 		for u in att:
 			_elimina(u, ci.p, eventi)
 		return
 	var dado := rng.randi_range(1, 6)
 	var esito := ZRegole.esito_combattimento(diff, dado)
-	eventi.append({"t": "combattimento", "att": att.map(func(u): return u.id), "dif": ci.g.duplicate(), "fa": fa, "fd": fd, "diff": diff, "fascia": ZRegole.fascia(diff), "dado": dado, "esito": esito, "citta": ci.id})
+	eventi.append({"t": "combattimento", "att": att.map(func(u): return u.id), "dif": ci.g.duplicate(), "fa": fa, "fd": fd, "diff": diff, "fascia": ZRegole.fascia(diff), "dado": dado, "esito": esito, "citta": ci.id, "ha": att.map(func(u): return [u.hex.x, u.hex.y]), "hd": [ci.h], "pa": att[0].popolo, "pd": ci.p})
 	_log("Assedio a una città %s: %d contro %d, dado %d » %s" % [ZRegole.degli(ci.p), fa, fd, dado, esito])
 	if esito.begins_with("D"):
 		# Il primo assediante entra: si preferisce un fante.

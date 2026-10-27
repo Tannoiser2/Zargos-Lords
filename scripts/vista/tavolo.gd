@@ -31,6 +31,14 @@ var _trascina_centro := false
 var _premuto_in := Vector2.ZERO
 var _spostato := false
 var effetti: Node3D
+var _materiale_mappa: StandardMaterial3D
+
+## "nuova" = mappa della nuova edizione (TTS); "originale" = tabellone 1979,
+## riallineato sul reticolo della nuova.
+func usa_mappa(quale: String) -> void:
+	var percorso := "res://assets/board/mappa_originale.jpg" if quale == "originale" else "res://assets/board/mappa.png"
+	if ResourceLoader.exists(percorso):
+		_materiale_mappa.albedo_texture = load(percorso)
 
 func _ready() -> void:
 	mappa = ZMappa.condivisa()
@@ -147,6 +155,7 @@ func _costruisci_tavolo() -> void:
 	pm.size = Vector2(w, hgt)
 	faccia.mesh = pm
 	var mf := StandardMaterial3D.new()
+	_materiale_mappa = mf
 	mf.albedo_texture = load("res://assets/board/mappa.png")
 	mf.roughness = 0.9
 	mf.albedo_color = Color(0.9, 0.88, 0.85)
@@ -492,3 +501,94 @@ func _unhandled_input(ev: InputEvent) -> void:
 
 func ruota_vista(gradi: float) -> void:
 	_yaw_obiettivo += deg_to_rad(gradi)
+
+# --- Scontri ----------------------------------------------------------------------
+
+var _scontro: Node3D
+
+## Mette in scena uno scontro: frecce dagli attaccanti al bersaglio, anelli
+## colorati e pedine sollevate, così si vede subito chi combatte contro chi.
+func mostra_scontro(att: Array, dif: Array, colore_att: Color, colore_dif: Color) -> void:
+	pulisci_scontro()
+	_scontro = Node3D.new()
+	add_child(_scontro)
+	var bersaglio := Vector3.ZERO
+	for h in dif:
+		bersaglio += mondo(h)
+	bersaglio /= maxf(1.0, dif.size())
+	for h in dif:
+		_scontro.add_child(_anello_scontro(h, colore_dif, 1.0))
+	for h in att:
+		_scontro.add_child(_anello_scontro(h, colore_att, 0.85))
+		var freccia := _freccia(mondo(h), bersaglio, colore_att)
+		_scontro.add_child(freccia)
+	# Le pedine coinvolte si alzano dal tavolo.
+	for s in segnalini.values():
+		var hex := esagono_da_mondo(s.position)
+		if hex in att or hex in dif:
+			s.corpo.position.y = 0.06
+	for s in citta.values():
+		if esagono_da_mondo(s.position) in dif:
+			s.corpo.position.y = 0.06
+
+func pulisci_scontro() -> void:
+	if _scontro:
+		_scontro.queue_free()
+		_scontro = null
+	for s in segnalini.values():
+		s.corpo.position.y = s._sollevato
+	for s in citta.values():
+		s.corpo.position.y = s._sollevato
+
+func _anello_scontro(h: Vector2i, colore: Color, scala: float) -> MeshInstance3D:
+	var a := _anello_esagono(colore, 0.03)
+	a.scale = Vector3(scala, 1, scala)
+	a.position = mondo(h) + Vector3(0, 0.012, 0)
+	var tw := a.create_tween().set_loops()
+	tw.tween_property(a.material_override, "albedo_color:a", 0.35, 0.45)
+	tw.tween_property(a.material_override, "albedo_color:a", 1.0, 0.45)
+	return a
+
+func _freccia(da: Vector3, a: Vector3, colore: Color) -> MeshInstance3D:
+	var dir := a - da
+	dir.y = 0
+	var l := dir.length()
+	var asse := dir.normalized()
+	var lato := Vector3(-asse.z, 0, asse.x)
+	var inizio := da + asse * 0.06
+	var fine := a - asse * 0.09
+	var largo := 0.032
+	var punta := 0.11
+	var collo := fine - asse * punta
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var q := 0.09
+	var pts := [
+		inizio + lato * largo, collo + lato * largo, collo - lato * largo,
+		inizio + lato * largo, collo - lato * largo, inizio - lato * largo,
+		collo + lato * largo * 2.6, fine, collo - lato * largo * 2.6,
+	]
+	for p in pts:
+		st.add_vertex(p + Vector3(0, q, 0))
+	var mi := MeshInstance3D.new()
+	mi.mesh = st.commit()
+	var m := StandardMaterial3D.new()
+	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	m.albedo_color = colore
+	m.cull_mode = BaseMaterial3D.CULL_DISABLED
+	m.no_depth_test = true
+	m.render_priority = 2
+	mi.material_override = m
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	return mi
+
+## Sposta una singola pedina (per mostrare passo passo movimenti e ritirate).
+func sposta(id: int, h: Vector2i, durata := 0.3) -> void:
+	if segnalini.has(id):
+		var p := mondo(h)
+		segnalini[id].vai_a(Vector3(p.x, segnalini[id].position.y, p.z), durata)
+
+func elimina(id: int) -> void:
+	if segnalini.has(id):
+		segnalini[id].elimina_animato()
+		segnalini.erase(id)

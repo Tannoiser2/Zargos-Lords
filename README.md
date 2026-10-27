@@ -49,6 +49,11 @@ Pubblicazione: https://tannoiser2.github.io/Zargos-Lords/
 - **Partita online** tramite Firebase (autenticazione anonima e Realtime Database), con posti assegnati per popolo.
 - **Salvataggio automatico** della partita locale dopo ogni azione.
 
+## Opzioni (menu in partita)
+
+- **Scontri**: *ruota originale* oppure *riquadro*. Con la ruota, il disco fotografato dalla scatola gira sotto il cartoncino del calendario, si ferma sul dado ed evidenzia la fascia della differenza. La ruota si usa per gli scontri che coinvolgono un giocatore umano; quelli fra IA usano il riquadro, più rapido. Le texture sono generate da `tools/genera_ruota.py`.
+- **Mappa**: *nuova* (modulo Tabletop Simulator) oppure *originale* (tabellone 1979). La mappa originale è riallineata esagono per esagono sul reticolo della nuova (`tools/mappa_originale/`); la scansione disponibile è a bassa risoluzione, per cui da vicino appare sfocata.
+
 ## Struttura
 
 | Percorso | Contenuto |
