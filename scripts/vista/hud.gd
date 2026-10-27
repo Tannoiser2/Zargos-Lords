@@ -4,6 +4,7 @@ extends CanvasLayer
 
 signal fase_premuta
 signal menu_premuto
+signal opzione_premuta(chiave: String)
 signal regole_premute
 signal griglia_premuta
 signal vista_ruotata(gradi: float)
@@ -64,23 +65,16 @@ func _barra_alta() -> void:
 	barra.add_theme_stylebox_override("panel", ZTema.riquadro(ZTema.CUOIO, ZTema.CUOIO_SCURO, 0, 0, 14))
 	radice.add_child(barra)
 	var h := HBoxContainer.new()
-	h.add_theme_constant_override("separation", 18)
+	h.add_theme_constant_override("separation", 22)
 	barra.add_child(h)
-	var logo := ZTema.etichetta("ZARGO'S LORDS", 30, ZTema.AVORIO, ZTema.titolo)
-	logo.add_theme_constant_override("line_spacing", -6)
-	h.add_child(logo)
-	var sep := VSeparator.new()
-	h.add_child(sep)
 	var cal_box := VBoxContainer.new()
 	cal_box.add_theme_constant_override("separation", 0)
-	lbl_mese = ZTema.etichetta("IL CALENDARIO · MESE 1 DI 25", 10, Color(ZTema.AVORIO, 0.7), ZTema.testo_forte)
+	cal_box.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	lbl_mese = ZTema.etichetta("IL CALENDARIO · MESE 1 DI 25", 11, Color(ZTema.AVORIO, 0.7), ZTema.testo_forte)
 	cal_box.add_child(lbl_mese)
 	calendario = ZWidget.Calendario.new()
 	cal_box.add_child(calendario)
 	h.add_child(cal_box)
-	var spazio := Control.new()
-	spazio.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	h.add_child(spazio)
 	var turno_box := HBoxContainer.new()
 	turno_box.add_theme_constant_override("separation", 10)
 	gettone_turno = ZWidget.Gettone.new(Color.WHITE, 26)
@@ -88,20 +82,48 @@ func _barra_alta() -> void:
 	turno_box.add_child(gettone_turno)
 	var tb := VBoxContainer.new()
 	tb.add_theme_constant_override("separation", -2)
+	tb.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	lbl_turno = ZTema.etichetta("", 22, ZTema.AVORIO, ZTema.titolo)
 	lbl_fase = ZTema.etichetta("", 12, Color(ZTema.AVORIO, 0.75), ZTema.testo_forte)
 	tb.add_child(lbl_turno)
 	tb.add_child(lbl_fase)
 	turno_box.add_child(tb)
 	h.add_child(turno_box)
+	var spazio := Control.new()
+	spazio.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	h.add_child(spazio)
+	# Scelte grafiche, sempre a portata di mano.
+	var opz := HBoxContainer.new()
+	opz.add_theme_constant_override("separation", 4)
+	for k in ["grafica", "risoluzione", "mappa"]:
+		var b := ZTema.pulsante("", func(): opzione_premuta.emit(k), 12)
+		b.custom_minimum_size = Vector2(0, 34)
+		b.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		pulsanti_opzioni[k] = b
+		opz.add_child(b)
+	h.add_child(opz)
 	var icone := HBoxContainer.new()
 	icone.add_theme_constant_override("separation", 6)
-	icone.add_child(ZWidget.Icona.new("sx", "Ruota la vista", func(): vista_ruotata.emit(-45.0)))
-	icone.add_child(ZWidget.Icona.new("dx", "Ruota la vista", func(): vista_ruotata.emit(45.0)))
 	icone.add_child(ZWidget.Icona.new("griglia", "Reticolo degli esagoni (G)", func(): griglia_premuta.emit()))
 	icone.add_child(ZWidget.Icona.new("aiuto", "Regole in breve", func(): regole_premute.emit()))
-	icone.add_child(ZWidget.Icona.new("menu", "Menu", func(): menu_premuto.emit()))
+	icone.add_child(ZWidget.Icona.new("casa", "Torna al menu principale (la partita è salvata)", func(): menu_premuto.emit()))
 	h.add_child(icone)
+
+var pulsanti_opzioni := {}
+
+## Testi dei pulsanti delle scelte grafiche nella barra in alto.
+func aggiorna_opzioni(grafica: String, risoluzione: String, mappa: String) -> void:
+	if pulsanti_opzioni.is_empty():
+		return
+	var b: Button = pulsanti_opzioni.grafica
+	b.text = "Pedine: " + {"originale": "1979", "nuova": "nuove", "3d": "3D"}.get(grafica, grafica)
+	b.tooltip_text = "Cambia la grafica delle pedine: originali 1979, nuove, miniature 3D"
+	b = pulsanti_opzioni.risoluzione
+	b.text = "Scontri: " + ("ruota" if risoluzione == "ruota" else "riquadro")
+	b.tooltip_text = "Risolvi scontri e tiri con la ruota originale o con il riquadro"
+	b = pulsanti_opzioni.mappa
+	b.text = "Mappa: " + ("1979" if mappa == "originale" else "nuova")
+	b.tooltip_text = "Mappa nuova (Tabletop Simulator) o tabellone originale del 1979"
 
 func _pannello_laterale() -> void:
 	var p := PanelContainer.new()
@@ -283,7 +305,7 @@ func _schieramento_banner(popolo: String, pezzi: Array, didascalia: String) -> C
 	return v
 
 ## Scheda dello scontro nel pannello a destra, con le pedine dei due schieramenti.
-func mostra_banner(pa: String, att: Array, forza_a: int, pd: String, dif: Array, forza_d: int, tipo := "ATTACCANO") -> void:
+func mostra_banner(pa: String, att: Array, forza_a: int, pd: String, dif: Array, forza_d: int, tipo := "ATTACCANO", testo_a := "", testo_d := "") -> void:
 	for c in box_scontro.get_children():
 		c.queue_free()
 	var v := VBoxContainer.new()
@@ -293,19 +315,46 @@ func mostra_banner(pa: String, att: Array, forza_a: int, pd: String, dif: Array,
 	v.add_child(intest)
 	var h := HBoxContainer.new()
 	h.add_theme_constant_override("separation", 8)
-	var sa := _schieramento_banner(pa, att, "attacco %d" % forza_a)
+	var sa := _schieramento_banner(pa, att, testo_a if testo_a != "" else "attacco %d" % forza_a)
 	sa.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	h.add_child(sa)
 	var vs := ZTema.etichetta("VS", 30, ZTema.OCRA, ZTema.titolo)
 	vs.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	h.add_child(vs)
-	var sd := _schieramento_banner(pd, dif, ("difesa %d" % forza_d) if forza_d >= 0 else "guarnigione coperta")
+	var sd := _schieramento_banner(pd, dif, testo_d if testo_d != "" else (("difesa %d" % forza_d) if forza_d >= 0 else "guarnigione coperta"))
 	sd.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	h.add_child(sd)
 	v.add_child(h)
+	_box_esito = VBoxContainer.new()
+	_box_esito.add_theme_constant_override("separation", 0)
+	v.add_child(_box_esito)
 	box_scontro.add_child(v)
 	box_scontro.visible = true
 	scroll_selezione.visible = false
+
+var _box_esito: VBoxContainer
+
+## Esito scritto sotto la scheda dello scontro, nello stesso stile.
+func esito_banner(titolo: String, testo: String) -> void:
+	if _box_esito == null or not is_instance_valid(_box_esito):
+		return
+	for c in _box_esito.get_children():
+		c.queue_free()
+	var sep := ColorRect.new()
+	sep.color = Color(ZTema.OCRA, 0.45)
+	sep.custom_minimum_size = Vector2(0, 2)
+	_box_esito.add_child(sep)
+	var spazio := Control.new()
+	spazio.custom_minimum_size = Vector2(0, 4)
+	_box_esito.add_child(spazio)
+	var t := ZTema.etichetta(titolo, 21, ZTema.AVORIO, ZTema.titolo)
+	t.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	t.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_box_esito.add_child(t)
+	var d := ZTema.etichetta(testo, 13, Color(ZTema.AVORIO, 0.85))
+	d.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	d.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_box_esito.add_child(d)
 
 func nascondi_banner() -> void:
 	box_scontro.visible = false
@@ -337,6 +386,7 @@ func _pannello_ruota() -> void:
 	vd.add_child(ruota_titolo)
 	vd.add_child(ruota_testo)
 	didascalia.add_child(vd)
+	didascalia.visible = false   # l'esito si legge nella scheda dello scontro a destra
 	h.add_child(didascalia)
 	ruota = ZRuota.new()
 	ruota.size_flags_vertical = Control.SIZE_SHRINK_END
@@ -345,7 +395,7 @@ func _pannello_ruota() -> void:
 
 ## La ruota sale da sotto la barra di stato, accanto a "fine mossa", gira fino
 ## al dado, evidenzia l'esito e poi ridiscende. Si attende con `await`.
-func mostra_ruota(dado: int, fascia: int, titolo: String, testo: String, intro: String, tabella := "combattimento") -> void:
+func mostra_ruota(dado: int, fascia: int, titolo: String, testo: String, intro: String, tabella := "combattimento", al_risultato: Callable = Callable()) -> void:
 	ruota.usa(tabella)
 	var vp := radice.size
 	ruota.scala = clampf((vp.y - 330.0) / (1024.0 * 0.53), 0.42, 0.55)
@@ -369,6 +419,8 @@ func mostra_ruota(dado: int, fascia: int, titolo: String, testo: String, intro: 
 	await tw.finished
 	ruota.gira(dado, fascia, 1.7)
 	await ruota.finita
+	if al_risultato.is_valid():
+		al_risultato.call()
 	ruota_titolo.text = titolo
 	ruota_testo.text = testo
 	await get_tree().create_timer(2.0).timeout

@@ -4,9 +4,10 @@ extends RefCounted
 
 ## Il calendario dei 25 mesi, come sulla ruota: i mesi trascorsi sono barrati.
 class Calendario extends Control:
+	const PASSO := 25.0
 	var mese := 1
 	func _init() -> void:
-		custom_minimum_size = Vector2(25 * 22 + 6, 30)
+		custom_minimum_size = Vector2(25 * PASSO + 8, 32)
 		mouse_filter = Control.MOUSE_FILTER_IGNORE
 	func imposta(m: int) -> void:
 		mese = m
@@ -14,23 +15,23 @@ class Calendario extends Control:
 	func _draw() -> void:
 		var font := ZTema.testo_forte
 		for i in 25:
-			var c := Vector2(14 + i * 22, size.y * 0.5)
+			var c := Vector2(14 + i * PASSO, size.y * 0.5)
 			var n := i + 1
 			var attuale := n == mese
 			if attuale:
-				draw_circle(c, 10.5, ZTema.AVORIO)
-				draw_arc(c, 10.5, 0, TAU, 24, ZTema.OCRA, 2.0, true)
+				draw_circle(c, 12.0, ZTema.AVORIO)
+				draw_arc(c, 12.0, 0, TAU, 28, ZTema.OCRA, 2.2, true)
 			else:
-				draw_arc(c, 9.5, 0, TAU, 24, Color(ZTema.AVORIO, 0.75 if n > mese else 0.35), 1.4, true)
+				draw_arc(c, 11.0, 0, TAU, 28, Color(ZTema.AVORIO, 0.75 if n > mese else 0.35), 1.5, true)
 			var s := str(n)
-			var dim := 11
+			var dim := 12
 			var w := font.get_string_size(s, HORIZONTAL_ALIGNMENT_CENTER, -1, dim).x
 			var col := ZTema.INCHIOSTRO if attuale else Color(ZTema.AVORIO, 0.9 if n > mese else 0.4)
 			draw_string(font, c + Vector2(-w * 0.5, 4), s, HORIZONTAL_ALIGNMENT_LEFT, -1, dim, col)
 			if n < mese:
 				# Tratto di penna, un po' storto come sull'originale.
 				var o := Vector2(sin(i * 1.7) * 1.5, cos(i * 2.3) * 1.5)
-				draw_line(c + Vector2(-8, 7) + o, c + Vector2(8, -7) - o, Color("e6dcc4"), 2.0, true)
+				draw_line(c + Vector2(-9, 8) + o, c + Vector2(9, -8) - o, Color("e6dcc4"), 2.0, true)
 
 ## Faccia di un dado a sei.
 class Dado extends Control:
@@ -141,6 +142,11 @@ class Icona extends Button:
 				draw_polyline(pts, col, w, true)
 			"aiuto":
 				draw_string(ZTema.titolo, c + Vector2(-5, 8), "?", HORIZONTAL_ALIGNMENT_LEFT, -1, 22, col)
+			"casa":
+				var pts := PackedVector2Array([c + Vector2(-9, 0), c + Vector2(0, -9), c + Vector2(9, 0)])
+				draw_polyline(pts, col, w, true)
+				draw_polyline(PackedVector2Array([c + Vector2(-6, -2), c + Vector2(-6, 8), c + Vector2(6, 8), c + Vector2(6, -2)]), col, w, true)
+				draw_rect(Rect2(c + Vector2(-2, 2), Vector2(4, 6)), col)
 			"menu":
 				for dy in [-6, 0, 6]:
 					draw_line(c + Vector2(-9, dy), c + Vector2(9, dy), col, w, true)

@@ -41,9 +41,9 @@ func _ready() -> void:
 	add_child(hud)
 	hud.fase_premuta.connect(_premi_fase)
 	hud.menu_premuto.connect(_menu_partita)
+	hud.opzione_premuta.connect(_cambia_opzione)
 	hud.regole_premute.connect(_mostra_regole)
 	hud.griglia_premuta.connect(func(): tavolo.mostra_griglia(not tavolo.griglia_visibile()))
-	hud.vista_ruotata.connect(func(g): tavolo.ruota_vista(g))
 	hud.radice.visible = false
 	online = FirebaseOnline.new()
 	add_child(online)
@@ -98,6 +98,7 @@ func _avvia_vista() -> void:
 	hud.radice.visible = true
 	_deseleziona()
 	tavolo.usa_mappa(impostazioni.get_value("gioco", "mappa", "nuova"))
+	_aggiorna_opzioni()
 	tavolo.sincronizza(partita, 0.0)
 	_inquadra_popolo(partita.popolo_di_mano())
 	_aggiorna()
@@ -128,22 +129,27 @@ func _imposta(chiave: String, valore: String) -> void:
 			_aggiorna()
 
 func _menu_partita() -> void:
-	var ruota: bool = impostazioni.get_value("gioco", "risoluzione", "ruota") == "ruota"
-	var originale: bool = impostazioni.get_value("gioco", "mappa", "nuova") == "originale"
-	var grafica: String = ZTema.grafica
-	var nomi_grafica := {"originale": "originale del 1979", "nuova": "nuova", "3d": "miniature 3D"}
-	var prossima: String = {"originale": "nuova", "nuova": "3d", "3d": "originale"}[grafica]
-	hud.apri_finestra("Menu", "La partita viene salvata automaticamente dopo ogni azione.\n\n[b]Scontri e tiri:[/b] %s\n[b]Mappa:[/b] %s\n[b]Pedine:[/b] %s" % [
-		"ruota originale" if ruota else "riquadro con la tabella", "originale del 1979" if originale else "nuova edizione (Tabletop Simulator)", nomi_grafica[grafica]], [
-		["Pedine: " + nomi_grafica[prossima], func(): _imposta("grafica", prossima); _menu_partita()],
-		["Scontri e tiri: " + ("usa il riquadro" if ruota else "usa la ruota"), func(): _imposta("risoluzione", "riquadro" if ruota else "ruota"); _menu_partita()],
-		["Mappa: " + ("nuova" if originale else "originale"), func(): _imposta("mappa", "nuova" if originale else "originale"); _menu_partita()],
-		["Torna al gioco", Callable()],
-		["Esci al menu principale", func():
+	hud.apri_finestra("Torna al menu principale?", "La partita è salvata dopo ogni azione: la ritrovi con «Continua la salvata»." if not in_online else "Lasci la stanza online.", [
+		["Resta", Callable()],
+		["Torna al menu", func():
 			if in_online:
 				online.stop_polling()
 			_apri_menu()],
-	], 720)
+	], 440)
+
+## Pulsanti della barra in alto: grafica delle pedine, ruota o riquadro, mappa.
+func _cambia_opzione(k: String) -> void:
+	match k:
+		"grafica":
+			_imposta("grafica", {"originale": "nuova", "nuova": "3d", "3d": "originale"}[ZTema.grafica])
+		"risoluzione":
+			_imposta("risoluzione", "riquadro" if impostazioni.get_value("gioco", "risoluzione", "ruota") == "ruota" else "ruota")
+		"mappa":
+			_imposta("mappa", "nuova" if impostazioni.get_value("gioco", "mappa", "nuova") == "originale" else "originale")
+	_aggiorna_opzioni()
+
+func _aggiorna_opzioni() -> void:
+	hud.aggiorna_opzioni(ZTema.grafica, impostazioni.get_value("gioco", "risoluzione", "ruota"), impostazioni.get_value("gioco", "mappa", "nuova"))
 
 # ---------------------------------------------------------------------------
 # Chi controlla cosa
@@ -287,17 +293,21 @@ func _presenta_tiro(e: Dictionary) -> void:
 	var b := partita.pedine[int(e.b)]
 	var tabella: String = {"frecce": "frecce", "fiamme": "fiamme", "visione": "visione"}.get(e.tipo, "")
 	var con_ruota: bool = tabella != "" and impostazioni.get_value("gioco", "risoluzione", "ruota") == "ruota"
-	if not con_ruota:
-		_effetto(e)
-		await get_tree().create_timer(1.3).timeout
-		return
-	_inquadra_azione([u.hex, b.hex], true)
+	var verbi := {"frecce": "TIRANO FRECCE", "cavallo": "TIRANO FRECCE", "dardi": "LANCIANO DARDI", "fiamme": "LANCIANO FIAMME", "visione": "LANCIANO UNA VISIONE"}
+	var sotto := "distanza %d" % int(e.distanza)
+	var bers := "fuga fino a %d" % b.m() if e.tipo == "visione" else "colpi %d/%d" % [int(e.totale) - int(e.colpi), int(e.servono)]
+	hud.mostra_banner(u.popolo, [ZTema.texture_pedina(u.popolo, u.tipo)], 0, b.popolo, [ZTema.texture_pedina(b.popolo, b.tipo)], 0, verbi.get(e.tipo, "TIRANO"), sotto, bers)
+	_inquadra_azione([u.hex, b.hex], con_ruota)
 	await get_tree().create_timer(0.5).timeout
 	await tavolo.lancia(u.hex, b.hex, e.tipo, u.id, b.id)
 	var tt := _testi_tiro(e)
-	var nomi := {"frecce": "Frecce", "fiamme": "Fiamme", "visione": "Visione"}
-	var intro := "%s di %s · distanza %d" % [nomi[tabella], u.nome(), int(e.distanza)]
-	await hud.mostra_ruota(int(e.get("dm", e.dado)), int(e.distanza) - 1, tt[0], tt[1], intro, tabella)
+	if con_ruota:
+		await hud.mostra_ruota(int(e.get("dm", e.dado)), int(e.distanza) - 1, tt[0], tt[1], "", tabella, func(): hud.esito_banner(tt[0], tt[1]))
+	else:
+		hud.mostra_dado(int(e.dado), tt[0], tt[1])
+		hud.esito_banner(tt[0], tt[1])
+		await get_tree().create_timer(1.4).timeout
+	hud.nascondi_banner()
 
 ## Scontro ben visibile: frecce sul tavolo, fascia con i due schieramenti,
 ## poi la ruota originale (o il riquadro, a scelta) con l'esito.
@@ -344,9 +354,10 @@ func _presenta_scontro(e: Dictionary) -> void:
 	await get_tree().create_timer(0.9 if coinvolge_umano else 0.5).timeout
 	if con_ruota:
 		var fascia := ZRegole.fascia(int(e.diff))
-		await hud.mostra_ruota(int(e.dado), fascia, titolo, testo, "%s %s · differenza %+d" % [ZRegole.Gli(pa), verbo.to_lower(), e.diff])
+		await hud.mostra_ruota(int(e.dado), fascia, titolo, testo, "", "combattimento", func(): hud.esito_banner(titolo, testo))
 	else:
 		hud.mostra_dado(int(e.dado), titolo, testo, int(e.diff) if int(e.dado) > 0 else -999)
+		hud.esito_banner(titolo, testo)
 		await get_tree().create_timer(1.6 if coinvolge_umano else 0.9).timeout
 	tavolo.pulisci_scontro()
 	hud.nascondi_banner()
@@ -875,33 +886,53 @@ func _aggiorna_popoli() -> void:
 		c.queue_free()
 	var elenco: Array = partita.ordine if partita.alternato() else partita.popoli
 	for p: String in elenco:
+		var attivo := p == partita.popolo_di_mano()
 		var riga := HBoxContainer.new()
 		riga.add_theme_constant_override("separation", 8)
-		var g := ZWidget.Gettone.new(ZRegole.COLORI[p], 16)
-		g.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-		riga.add_child(g)
-		var attivo := p == partita.popolo_di_mano()
-		var nome := ZTema.etichetta(p, 16, ZTema.INCHIOSTRO, ZTema.testo_forte if attivo else ZTema.testo)
-		nome.custom_minimum_size = Vector2(84, 0)
-		riga.add_child(nome)
+		# Ritratto del Signore, con il colore del popolo sotto.
+		var cornice := PanelContainer.new()
+		cornice.add_theme_stylebox_override("panel", ZTema.riquadro(Color(ZRegole.COLORI[p], 0.35 if attivo else 0.18), ZRegole.COLORI[p].darkened(0.3), 2 if attivo else 1, 4, 1))
+		var img := TextureRect.new()
+		img.texture = ZTema.ritratto_signore(p)
+		img.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		img.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		img.custom_minimum_size = Vector2(34, 40)
+		cornice.add_child(img)
+		riga.add_child(cornice)
+		var v := VBoxContainer.new()
+		v.add_theme_constant_override("separation", 0)
+		v.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		var sopra := HBoxContainer.new()
+		sopra.add_child(ZTema.etichetta(p, 16, ZTema.INCHIOSTRO, ZTema.testo_forte if attivo else ZTema.testo))
 		var ctrl: String = partita.controllo.get(p, "")
 		var etichetta := "IA" if ctrl == "ia" else ("tu" if _mio(p) else ("remoto" if in_online else "giocatore"))
-		riga.add_child(ZTema.etichetta(etichetta, 12, Color(ZTema.INCHIOSTRO, 0.55)))
-		var spazio := Control.new()
-		spazio.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		riga.add_child(spazio)
-		var alleati: PackedStringArray = []
-		for q in partita.popoli:
-			if q != p and partita.alleati(p, q):
-				alleati.append(q.left(3))
-		if not alleati.is_empty():
-			riga.add_child(ZTema.etichetta("alleati: " + ", ".join(alleati), 12, ZTema.VERDE, ZTema.testo_forte))
-		if partita.opzione("magia"):
-			riga.add_child(ZTema.etichetta("magia %d" % int(partita.preparazione.get(p, 0)), 13, Color("6a3fa0"), ZTema.testo_forte))
+		var et := ZTema.etichetta(etichetta, 12, Color(ZTema.INCHIOSTRO, 0.55))
+		et.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		sopra.add_child(et)
 		var testo_p := "%d città · %d pezzi" % [partita.citta_di(p), partita.pedine_di(p).size()]
 		if partita.opzione("lampo"):
 			testo_p = "%s punti · %d città" % [ZPartita.numero(partita.punteggio(p)), partita.citta_di(p)]
-		riga.add_child(ZTema.etichetta(testo_p, 13, ZTema.INCHIOSTRO, ZTema.testo_forte if attivo else ZTema.testo))
+		sopra.add_child(ZTema.etichetta(testo_p, 13, ZTema.INCHIOSTRO, ZTema.testo_forte if attivo else ZTema.testo))
+		v.add_child(sopra)
+		var note: PackedStringArray = []
+		var alleati: PackedStringArray = []
+		for q in partita.popoli:
+			if q != p and partita.alleati(p, q):
+				alleati.append(q)
+		if not alleati.is_empty():
+			note.append("[color=#5a7a2a]alleati: %s[/color]" % ", ".join(alleati))
+		if partita.opzione("magia"):
+			note.append("[color=#6a3fa0]magia %d[/color]" % int(partita.preparazione.get(p, 0)))
+		if not note.is_empty():
+			var rt := RichTextLabel.new()
+			rt.bbcode_enabled = true
+			rt.fit_content = true
+			rt.scroll_active = false
+			rt.add_theme_font_size_override("normal_font_size", 12)
+			rt.add_theme_font_override("normal_font", ZTema.testo_forte)
+			rt.text = " · ".join(note)
+			v.add_child(rt)
+		riga.add_child(v)
 		hud.box_popoli.add_child(riga)
 
 func _scheda_pedina(u: ZPedina) -> Control:
@@ -1123,25 +1154,21 @@ func _pannello_magia(box: VBoxContainer) -> void:
 
 func _legenda(box: VBoxContainer) -> void:
 	box.add_child(ZTema.titoletto("Il terreno", 16))
+	var g := GridContainer.new()
+	g.columns = 2
+	g.add_theme_constant_override("h_separation", 10)
+	g.add_theme_constant_override("v_separation", 0)
 	for riga in [
-		["Pianura", "movimento 1"],
-		["Bosco", "costa 2 punti · +1 in difesa · blocca le frecce"],
-		["Montagna", "si sale con un'intera mossa · +3 in difesa"],
-		["Gorgo magico", "ferma e paralizza per tre mosse"],
-		["Ponte di nuvole", "unico passaggio sul mare, da costa a costa"],
+		["Pianura", "1 punto"],
+		["Bosco", "2 punti · +1 difesa · niente frecce"],
+		["Montagna", "tutta la mossa · +3 difesa"],
+		["Gorgo", "paralizza per 3 mosse"],
+		["Ponte", "da costa a costa"],
 	]:
-		var h := HBoxContainer.new()
-		var a := ZTema.etichetta(riga[0], 13, ZTema.INCHIOSTRO, ZTema.testo_forte)
-		a.custom_minimum_size = Vector2(108, 0)
-		h.add_child(a)
-		var b := ZTema.etichetta(riga[1], 13)
-		b.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		h.add_child(b)
-		box.add_child(h)
-	var nota := ZTema.etichetta("Passa il mouse su un esagono per i dettagli; clic su un pezzo o una città per selezionarli.", 12, Color(ZTema.INCHIOSTRO, 0.6))
-	nota.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	box.add_child(nota)
+		g.add_child(ZTema.etichetta(riga[0], 12, ZTema.INCHIOSTRO, ZTema.testo_forte))
+		g.add_child(ZTema.etichetta(riga[1], 12))
+	box.add_child(g)
+	box.add_child(ZTema.etichetta("Mouse su un esagono per i dettagli.", 11, Color(ZTema.INCHIOSTRO, 0.55)))
 
 func _pannello_scontro(box: VBoxContainer) -> void:
 	box.add_child(ZTema.titoletto("Scontro", 20))
