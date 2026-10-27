@@ -214,21 +214,88 @@ func figura(t: String) -> void:
 	for mi in n.find_children("*", "MeshInstance3D", true, false):
 		(mi as MeshInstance3D).cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
 	corpo.add_child(_figura)
+	_grigia_figura()
 
 func _imposta_faccia(p_popolo: String, p_tipo: String) -> void:
 	popolo = p_popolo
 	_faccia_attuale = p_tipo
-	corpo.set_surface_override_material(0, materiale_faccia(percorso_faccia(p_popolo, p_tipo)))
+	_applica_materiali()
 	figura(p_tipo)
-	corpo.set_surface_override_material(1, materiale_bordo(ZRegole.COLORI[p_popolo].darkened(0.35)))
+
+# --- Pezzi ridotti: tutto grigio, come pietrificato ----------------------------------
+
+const SHADER_GRIGIO := """
+shader_type spatial;
+render_mode cull_disabled;
+uniform sampler2D tex : source_color, filter_linear_mipmap;
+uniform vec4 base : source_color = vec4(1.0);
+uniform bool usa_tex = true;
+void fragment() {
+	vec4 c = usa_tex ? texture(tex, UV) : base;
+	float g = dot(c.rgb, vec3(0.299, 0.587, 0.114));
+	ALBEDO = vec3(g * 0.6 + 0.12);
+	ROUGHNESS = 0.95;
+}
+"""
+static var _shader_grigio: Shader
+var _grigio := false
+
+static func materiale_grigio(tex: Texture2D, colore := Color.WHITE) -> ShaderMaterial:
+	var k := "grigio_%d_%s" % [tex.get_instance_id() if tex else 0, colore.to_html()]
+	if _mat_cache.has(k):
+		return _mat_cache[k]
+	if _shader_grigio == null:
+		_shader_grigio = Shader.new()
+		_shader_grigio.code = SHADER_GRIGIO
+	var m := ShaderMaterial.new()
+	m.shader = _shader_grigio
+	m.set_shader_parameter("usa_tex", tex != null)
+	if tex:
+		m.set_shader_parameter("tex", tex)
+	m.set_shader_parameter("base", colore)
+	_mat_cache[k] = m
+	return m
+
+func _applica_materiali() -> void:
+	var percorso := percorso_faccia(popolo, _faccia_attuale)
+	if _grigio:
+		corpo.set_surface_override_material(0, materiale_grigio(load(percorso)))
+		corpo.set_surface_override_material(1, materiale_bordo(Color(0.42, 0.42, 0.42)))
+	else:
+		corpo.set_surface_override_material(0, materiale_faccia(percorso))
+		corpo.set_surface_override_material(1, materiale_bordo(ZRegole.COLORI[popolo].darkened(0.35)))
+	_grigia_figura()
+
+func _grigia_figura() -> void:
+	if _figura == null:
+		return
+	for mi in _figura.find_children("*", "MeshInstance3D", true, false):
+		var m := mi as MeshInstance3D
+		if not _grigio:
+			m.material_override = null
+			continue
+		var tex: Texture2D = null
+		var col := Color.WHITE
+		var orig := m.get_active_material(0)
+		if orig is StandardMaterial3D:
+			tex = (orig as StandardMaterial3D).albedo_texture
+			col = (orig as StandardMaterial3D).albedo_color
+		m.material_override = materiale_grigio(tex, col)
+
+## Pezzo ridotto: pedina e miniatura grigie e ferme.
+func grigio(attivo: bool) -> void:
+	if attivo == _grigio:
+		return
+	_grigio = attivo
+	_applica_materiali()
 
 var _faccia_attuale := ""
 
 func faccia(t: String) -> void:
 	if t != _faccia_attuale:
 		_faccia_attuale = t
-		corpo.set_surface_override_material(0, materiale_faccia(percorso_faccia(popolo, t)))
 		figura(t)
+		_applica_materiali()
 
 func cambia_popolo(p: String) -> void:
 	if p != popolo:

@@ -322,15 +322,18 @@ func sincronizza(g: ZPartita, durata := 0.25) -> void:
 		if u.scomparso:
 			# Al posto del Signore Monaco resta il segnalino di sparizione.
 			s.faccia("scomparso")
+			s.grigio(false)
 			s.scale = Vector3.ONE * 0.75
 			s.testo("")
 		elif u.ridotta:
-			# Pezzo ridotto: girato a faccia in giù, come sul tavolo.
-			s.faccia("retro")
+			# Pezzo ridotto: tutto grigio, come pietrificato.
+			s.faccia(u.tipo)
+			s.grigio(true)
 			s.scale = Vector3.ONE * (SCALA_PILA if _pila(g, u)[1] >= 2 else 1.0)
 			s.testo("")
 		else:
 			s.faccia(u.tipo)
+			s.grigio(false)
 			s.scale = Vector3.ONE * (SCALA_PILA if _pila(g, u)[1] >= 2 else 1.0)
 			s.testo(str(u.paralisi) if u.paralisi > 0 else "", Color(0.95, 0.6, 1.0))
 		if u.spada >= g.turno_globale:
