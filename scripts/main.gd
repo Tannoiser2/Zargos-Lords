@@ -291,6 +291,8 @@ func _presenta_tiro(e: Dictionary) -> void:
 		_effetto(e)
 		await get_tree().create_timer(1.3).timeout
 		return
+	_inquadra_azione([u.hex, b.hex], true)
+	await get_tree().create_timer(0.5).timeout
 	await tavolo.lancia(u.hex, b.hex, e.tipo, u.id, b.id)
 	var tt := _testi_tiro(e)
 	var nomi := {"frecce": "Frecce", "fiamme": "Fiamme", "visione": "Visione"}
@@ -312,16 +314,7 @@ func _presenta_scontro(e: Dictionary) -> void:
 	var coinvolge_umano := _umano_locale(pa) or _umano_locale(pd)
 	tavolo.mostra_scontro(ha, hd, ZTema.OCRA, Color(0.95, 0.15, 0.1))
 	var con_ruota: bool = int(e.dado) > 0 and impostazioni.get_value("gioco", "risoluzione", "ruota") == "ruota"
-	if not hd.is_empty():
-		var dist := minf(tavolo._distanza_obiettivo, 5.5)
-		var punto := tavolo.mondo(hd[0])
-		if con_ruota:
-			# La ruota occupa la destra: lo scontro si sposta nella metà sinistra.
-			# La ruota sale in basso a destra: lo scontro va in alto a sinistra.
-			var destra := tavolo.camera.global_transform.basis.x
-			var avanti := Vector3(destra.z, 0, -destra.x)
-			punto += destra * dist * 0.18 - avanti * dist * 0.12
-		tavolo.inquadra(punto, dist)
+	_inquadra_azione(ha + hd, con_ruota)
 	var t_att: Array = []
 	for id in e.att:
 		var u := partita.pedine[int(id)]
@@ -357,6 +350,29 @@ func _presenta_scontro(e: Dictionary) -> void:
 		await get_tree().create_timer(1.6 if coinvolge_umano else 0.9).timeout
 	tavolo.pulisci_scontro()
 	hud.nascondi_banner()
+
+## Porta la telecamera sui pezzi coinvolti in uno scontro o in un tiro, abbastanza
+## vicina da riconoscerli. Con la ruota (che sale in basso a destra) l'azione
+## viene spostata in alto a sinistra perché resti visibile.
+func _inquadra_azione(esagoni: Array, con_ruota: bool) -> void:
+	if esagoni.is_empty():
+		return
+	var centro := Vector3.ZERO
+	for h: Vector2i in esagoni:
+		centro += tavolo.mondo(h)
+	centro /= esagoni.size()
+	var ampiezza := 0.0
+	for h: Vector2i in esagoni:
+		ampiezza = maxf(ampiezza, centro.distance_to(tavolo.mondo(h)))
+	var dist := clampf(2.0 + ampiezza * 2.4, 2.2, 5.0)
+	var punto := centro
+	if con_ruota:
+		var destra := tavolo.camera.global_transform.basis.x
+		destra.y = 0
+		destra = destra.normalized()
+		var avanti := Vector3(destra.z, 0, -destra.x)
+		punto += destra * dist * 0.2 - avanti * dist * 0.1
+	tavolo.inquadra(punto, dist)
 
 func _umano_locale(p: String) -> bool:
 	if p == "" or partita == null:
@@ -843,12 +859,16 @@ func _aggiorna() -> void:
 		_: hud.btn_fase.text = "PARTITA FINITA"
 	hud.btn_fase.disabled = not _posso_agire()
 	hud.attesa.text = ("%s pensano…" % ZRegole.Gli(p)) if ia_in_corso else ""
-	_aggiorna_popoli()
+	# Durante la messa in scena cronaca e conteggi restano quelli di prima:
+	# l'esito si scopre con la ruota, non leggendolo in anticipo.
+	if not presentando:
+		_aggiorna_popoli()
 	_aggiorna_selezione()
 	_aggiorna_vassoio()
 	_aggiorna_evidenziazioni()
 	_aggiorna_suggerimento()
-	hud.scrivi_cronaca(partita.registro.slice(maxi(0, partita.registro.size() - 80)))
+	if not presentando:
+		hud.scrivi_cronaca(partita.registro.slice(maxi(0, partita.registro.size() - 80)))
 
 func _aggiorna_popoli() -> void:
 	for c in hud.box_popoli.get_children():
