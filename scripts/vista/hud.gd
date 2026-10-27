@@ -345,6 +345,25 @@ func mostra_banner(pa: String, att: Array, forza_a: int, pd: String, dif: Array,
 
 var _box_esito: VBoxContainer
 
+## Carta di una magia con il suo esito, nel riquadro degli scontri.
+func mostra_carta(tex: Texture2D, titolo: String, testo: String) -> void:
+	for c in box_scontro.get_children():
+		c.queue_free()
+	var v := VBoxContainer.new()
+	v.add_theme_constant_override("separation", 6)
+	var img := TextureRect.new()
+	img.texture = tex
+	img.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	img.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	img.custom_minimum_size = Vector2(0, 230)
+	v.add_child(img)
+	_box_esito = VBoxContainer.new()
+	v.add_child(_box_esito)
+	box_scontro.add_child(v)
+	box_scontro.visible = true
+	scroll_selezione.visible = false
+	esito_banner(titolo, testo)
+
 ## Esito scritto sotto la scheda dello scontro, nello stesso stile.
 func esito_banner(titolo: String, testo: String) -> void:
 	if _box_esito == null or not is_instance_valid(_box_esito):

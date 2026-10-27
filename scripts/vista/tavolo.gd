@@ -281,6 +281,7 @@ func pulisci_evidenziazioni(tranne: Array = []) -> void:
 ## si dispongono affiancati e rimpiccioliti dentro l'esagono, così è chiaro che
 ## occupano lo stesso esagono e non sconfinano nei vicini.
 const SCALA_PILA := 0.6
+const ALTEZZA_SCORTA_3D := 0.0
 func _pila(g: ZPartita, u: ZPedina) -> Array:
 	if u.scomparso:
 		return [0, 1]
@@ -288,11 +289,23 @@ func _pila(g: ZPartita, u: ZPedina) -> Array:
 	pila.sort_custom(func(a, b): return (1 if a.scorta >= 0 else 0) * 100000 + a.id < (1 if b.scorta >= 0 else 0) * 100000 + b.id)
 	return [maxi(0, pila.find(u)), pila.size()]
 
+## Pila affiancata (Zargo's Lords 2). La scorta del gioco base invece si
+## mostra come sul tavolo: il fante sovrapposto al pezzo che scorta.
+func _affiancati(g: ZPartita, u: ZPedina) -> bool:
+	return _pila(g, u)[1] >= 2 and u.scorta < 0 and u.scortato_da < 0
+
 func _posizione_pedina(g: ZPartita, u: ZPedina) -> Vector3:
 	var p := mondo(u.hex)
 	p.y += altezza_terreno(g, u.hex)
-	var pl := _pila(g, u)
-	if pl[1] >= 2:
+	if u.scorta >= 0:
+		# Fante di scorta: sopra lo scortato, un po' spostato perché si veda chi c'è sotto.
+		p.y += ZSegnalino.SPESSORE + (ALTEZZA_SCORTA_3D if ZTema.grafica == "3d" else 0.0)
+		p += Vector3(0.045, 0, 0.045) if ZTema.grafica != "3d" else Vector3(0.07, 0, 0.07)
+		return p
+	if u.scortato_da >= 0:
+		return p
+	if _affiancati(g, u):
+		var pl := _pila(g, u)
 		var lato := -1.0 if pl[0] == 0 else 1.0
 		p += Vector3(lato * ZSegnalino.RAGGIO * 0.56, 0, 0)
 	if u.scomparso and not g.pedine_in(u.hex).is_empty():
@@ -330,12 +343,12 @@ func sincronizza(g: ZPartita, durata := 0.25) -> void:
 			# Pezzo ridotto: tutto grigio, come pietrificato.
 			s.faccia(u.tipo)
 			s.grigio(true)
-			s.scale = Vector3.ONE * (SCALA_PILA if _pila(g, u)[1] >= 2 else 1.0)
+			s.scale = Vector3.ONE * (SCALA_PILA if _affiancati(g, u) else 1.0)
 			s.testo("")
 		else:
 			s.faccia(u.tipo)
 			s.grigio(false)
-			s.scale = Vector3.ONE * (SCALA_PILA if _pila(g, u)[1] >= 2 else 1.0)
+			s.scale = Vector3.ONE * (SCALA_PILA if _affiancati(g, u) else 1.0)
 			s.testo(str(u.paralisi) if u.paralisi > 0 else "", Color(0.95, 0.6, 1.0))
 		if u.spada >= g.turno_globale:
 			s.alone(Color(1.0, 0.95, 0.6))
@@ -892,8 +905,7 @@ func mostra_scontro(att: Array, dif: Array, colore_att: Color, colore_dif: Color
 		_scontro.add_child(_anello_scontro(h, colore_dif, 1.0))
 	for h in att:
 		_scontro.add_child(_anello_scontro(h, colore_att, 0.85))
-		var freccia := _freccia(mondo(h), bersaglio, colore_att)
-		_scontro.add_child(freccia)
+		_scontro.add_child(_freccia_arco(mondo(h), bersaglio, colore_att))
 	# Le pedine coinvolte si alzano dal tavolo.
 	for s in segnalini.values():
 		var hex := esagono_da_mondo(s.position)
@@ -920,6 +932,85 @@ func _anello_scontro(h: Vector2i, colore: Color, scala: float) -> MeshInstance3D
 	tw.tween_property(a.material_override, "albedo_color:a", 0.35, 0.45)
 	tw.tween_property(a.material_override, "albedo_color:a", 1.0, 0.45)
 	return a
+
+## Freccia d'attacco: un arco che scavalca le pedine e scende sul bersaglio
+## con una punta ben marcata, nel colore del popolo che attacca e bordata di scuro.
+func _freccia_arco(da: Vector3, a: Vector3, colore: Color) -> Node3D:
+	var n := Node3D.new()
+	var quota := 0.32 if ZTema.grafica == "3d" else 0.1
+	var dir := a - da
+	dir.y = 0
+	var asse := dir.normalized()
+	var p0 := da + asse * 0.03 + Vector3(0, quota, 0)
+	var p2 := a - asse * 0.02 + Vector3(0, quota * 0.55 + 0.03, 0)
+	var p1 := (p0 + p2) * 0.5 + Vector3(0, 0.12 + dir.length() * 0.25, 0)
+	var curva := func(t: float) -> Vector3:
+		return p0.lerp(p1, t).lerp(p1.lerp(p2, t), t)
+	n.add_child(_tubo(curva, 0.016, 0.07, Color(0.08, 0.05, 0.03), 1))
+	n.add_child(_tubo(curva, 0.011, 0.06, colore, 2))
+	return n
+
+## Tubo lungo una curva, che termina con una punta conica (lunghezza `punta`).
+func _tubo(curva: Callable, raggio: float, punta: float, colore: Color, priorita: int) -> MeshInstance3D:
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var passi := 24
+	var lati := 8
+	var pts: Array[Vector3] = []
+	for i in passi + 1:
+		pts.append(curva.call(i / float(passi)))
+	# Lunghezza totale per sapere dove inizia la punta.
+	var cum: Array[float] = [0.0]
+	for i in range(1, pts.size()):
+		cum.append(cum[i - 1] + pts[i].distance_to(pts[i - 1]))
+	var tot: float = cum[cum.size() - 1]
+	var inizio_punta := maxf(0.0, tot - punta)
+	var anelli: Array = []
+	for i in pts.size():
+		var t := pts[i]
+		var tang := (pts[mini(i + 1, pts.size() - 1)] - pts[maxi(i - 1, 0)]).normalized()
+		var su := Vector3.UP if absf(tang.dot(Vector3.UP)) < 0.95 else Vector3.RIGHT
+		var x := tang.cross(su).normalized()
+		var y := x.cross(tang).normalized()
+		var r := raggio
+		if cum[i] >= inizio_punta:
+			r = raggio * 3.2 * (tot - cum[i]) / maxf(punta, 0.001)
+		var anello: Array[Vector3] = []
+		for k in lati:
+			var ang := TAU * k / lati
+			anello.append(t + (x * cos(ang) + y * sin(ang)) * r)
+		anelli.append(anello)
+		# Gradino alla base della punta.
+		if i + 1 < pts.size() and cum[i] < inizio_punta and cum[i + 1] >= inizio_punta:
+			var base: Array[Vector3] = []
+			var tb := t.lerp(pts[i + 1], (inizio_punta - cum[i]) / maxf(cum[i + 1] - cum[i], 0.0001))
+			for k in lati:
+				var ang := TAU * k / lati
+				base.append(tb + (x * cos(ang) + y * sin(ang)) * raggio)
+			anelli.append(base)
+			var larga: Array[Vector3] = []
+			for k in lati:
+				var ang := TAU * k / lati
+				larga.append(tb + (x * cos(ang) + y * sin(ang)) * raggio * 3.2)
+			anelli.append(larga)
+	for i in anelli.size() - 1:
+		var a1: Array = anelli[i]
+		var a2: Array = anelli[i + 1]
+		for k in lati:
+			var k2 := (k + 1) % lati
+			for v in [a1[k], a2[k], a2[k2], a1[k], a2[k2], a1[k2]]:
+				st.add_vertex(v)
+	var mi := MeshInstance3D.new()
+	mi.mesh = st.commit()
+	var m := StandardMaterial3D.new()
+	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	m.albedo_color = colore
+	m.cull_mode = BaseMaterial3D.CULL_DISABLED
+	m.no_depth_test = true
+	m.render_priority = priorita
+	mi.material_override = m
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	return mi
 
 func _freccia(da: Vector3, a: Vector3, colore: Color) -> MeshInstance3D:
 	var dir := a - da

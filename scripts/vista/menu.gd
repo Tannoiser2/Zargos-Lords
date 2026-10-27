@@ -39,22 +39,28 @@ func _ready() -> void:
 	fondo.color = ZTema.CUOIO_SCURO
 	fondo.set_anchors_preset(Control.PRESET_FULL_RECT)
 	radice.add_child(fondo)
-	# Copertina originale a sinistra, incorniciata come la scatola: è lei il titolo.
-	var cornice := PanelContainer.new()
-	cornice.anchor_bottom = 1.0
-	cornice.anchor_right = 0.36
-	cornice.offset_left = 28
-	cornice.offset_top = 28
-	cornice.offset_bottom = -28
-	cornice.offset_right = -8
-	cornice.add_theme_stylebox_override("panel", ZTema.riquadro(ZTema.TERRA_ROSA, ZTema.INCHIOSTRO, 3, 4, 0))
-	radice.add_child(cornice)
-	var copertina := TextureRect.new()
-	copertina.texture = load("res://assets/ui/copertina.jpg")
-	copertina.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	copertina.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
-	copertina.clip_contents = true
-	cornice.add_child(copertina)
+	# A sinistra i quattro Signori del 1979 (illustrazione di Casolari) sotto il nome del gioco.
+	var sinistra := VBoxContainer.new()
+	sinistra.anchor_bottom = 1.0
+	sinistra.anchor_right = 0.36
+	sinistra.offset_left = 28
+	sinistra.offset_top = 22
+	sinistra.offset_bottom = -20
+	sinistra.offset_right = -8
+	sinistra.add_theme_constant_override("separation", 0)
+	radice.add_child(sinistra)
+	var logo := ZTema.etichetta("ZARGO'S LORDS", 64, ZTema.AVORIO, ZTema.titolo)
+	logo.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	sinistra.add_child(logo)
+	var motto := ZTema.etichetta("duelli magici per il potere mondiale", 16, ZTema.TERRA_ROSA, ZTema.testo_forte)
+	motto.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	sinistra.add_child(motto)
+	var illustrazione := TextureRect.new()
+	illustrazione.texture = load("res://assets/ui/signori_insieme.png")
+	illustrazione.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	illustrazione.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	illustrazione.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	sinistra.add_child(illustrazione)
 	# Colonna destra; lo scorrimento resta solo come riserva per finestre minuscole.
 	var scroll := ScrollContainer.new()
 	scroll.anchor_left = 0.36

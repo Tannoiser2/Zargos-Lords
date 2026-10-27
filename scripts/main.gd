@@ -253,6 +253,12 @@ func _presenta_coda() -> void:
 				await _presenta_scontro(e)
 			"tiro":
 				await _presenta_tiro(e)
+			"magia":
+				_effetto(e)
+				var mm: Dictionary = ZRegole.MAGIE[e.s]
+				hud.mostra_carta(load("res://assets/ui/magie/%s.png" % e.s), ("%s RIUSCITA" if e.ok else "%s FALLITA") % String(mm.nome).to_upper(), "%s: dado %d + %d punti = %d (serve %d)." % [ZRegole.Gli(e.p), e.dado, e.punti, e.totale, mm.min])
+				await get_tree().create_timer(2.4).timeout
+				hud.nascondi_banner()
 			"scompare":
 				await tavolo.svanisci(int(e.u))
 				tavolo.sincronizza(partita, 0.0)
@@ -322,7 +328,7 @@ func _presenta_scontro(e: Dictionary) -> void:
 	var pd: String = e.get("pd", "")
 	var citta := e.has("citta")
 	var coinvolge_umano := _umano_locale(pa) or _umano_locale(pd)
-	tavolo.mostra_scontro(ha, hd, ZTema.OCRA, Color(0.95, 0.15, 0.1))
+	tavolo.mostra_scontro(ha, hd, ZRegole.COLORI.get(pa, ZTema.OCRA), Color(0.95, 0.15, 0.1))
 	var con_ruota: bool = int(e.dado) > 0 and impostazioni.get_value("gioco", "risoluzione", "ruota") == "ruota"
 	_inquadra_azione(ha + hd, con_ruota)
 	var t_att: Array = []
@@ -1125,29 +1131,54 @@ func _pannello_magia(box: VBoxContainer) -> void:
 	piu.disabled = magia_punti >= prep
 	rp.add_child(piu)
 	box.add_child(rp)
-	for scuola in ["bianca", "nera"]:
-		box.add_child(ZTema.etichetta("Magia " + scuola, 12, ZTema.CUOIO, ZTema.testo_forte))
-		var g := GridContainer.new()
-		g.columns = 2
-		for k in ZRegole.MAGIE:
-			var m: Dictionary = ZRegole.MAGIE[k]
-			if m.scuola != scuola:
-				continue
-			var b := ZTema.pulsante("%s  %d+" % [m.nome, m.min], func(): magia_scelta = "" if magia_scelta == k else k; magia_h1 = Vector2i(-1, -1); _aggiorna(), 13)
-			b.toggle_mode = true
-			b.set_pressed_no_signal(magia_scelta == k)
-			b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-			b.tooltip_text = m.testo
-			g.add_child(b)
-		box.add_child(g)
+	if magia_scelta != "":
+		# Carta scelta in grande, con il pulsante per tornare alle altre.
+		var m: Dictionary = ZRegole.MAGIE[magia_scelta]
+		var carta := _carta_magia(magia_scelta, Vector2(320, 320), true)
+		box.add_child(carta)
+		box.add_child(ZTema.pulsante("‹ Scegli un'altra magia", func(): magia_scelta = ""; magia_h1 = Vector2i(-1, -1); _aggiorna(), 13))
+	else:
+		for scuola in ["bianca", "nera"]:
+			box.add_child(ZTema.etichetta("Magia " + scuola, 12, ZTema.CUOIO, ZTema.testo_forte))
+			var g := GridContainer.new()
+			g.columns = 3
+			g.add_theme_constant_override("h_separation", 4)
+			g.add_theme_constant_override("v_separation", 4)
+			for k in ZRegole.MAGIE:
+				if ZRegole.MAGIE[k].scuola == scuola:
+					g.add_child(_carta_magia(k, Vector2(104, 104), false))
+			box.add_child(g)
 	if magia_scelta != "":
 		var m: Dictionary = ZRegole.MAGIE[magia_scelta]
 		var probabilita := clampi(7 - (int(m.min) - magia_punti), 0, 6)
-		var d := ZTema.etichetta("%s — %s Riesce con %d su 6." % [m.nome, m.testo, probabilita], 13)
+		var d := ZTema.etichetta("Con %d punti di preparazione riesce con %d su 6." % [magia_punti, probabilita], 13)
 		d.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		box.add_child(d)
 		var guida := {"frana": "Clicca un esagono di montagna.", "ponte": "Clicca la prima costa." if magia_h1.x < 0 else "Ora clicca la seconda costa (2-4 esagoni più in là).", "coraggio": "Clicca vicino alle tue unità ridotte.", "spada": "Clicca l'esagono dei tuoi pezzi.", "rinascita": "Clicca una tua città.", "odalische": "Clicca un Signore nemico.", "megadrago": "Clicca un esagono di terra libero.", "sonno": "Clicca l'esagono dei nemici.", "terremoto": "Clicca l'esagono dei nemici.", "voragine": "Clicca una città nemica."}
 		box.add_child(ZTema.etichetta(guida.get(magia_scelta, ""), 13, ZTema.VERDE.darkened(0.3), ZTema.testo_forte))
+
+## Carta di una magia (illustrazione con nome, punti minimi ed effetto).
+## Piccola è un pulsante che la sceglie.
+func _carta_magia(k: String, dim: Vector2, grande: bool) -> Control:
+	var tex: Texture2D = load("res://assets/ui/magie/%s.png" % k)
+	var m: Dictionary = ZRegole.MAGIE[k]
+	if grande:
+		var img := TextureRect.new()
+		img.texture = tex
+		img.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		img.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		img.custom_minimum_size = dim
+		return img
+	var b := TextureButton.new()
+	b.texture_normal = tex
+	b.ignore_texture_size = true
+	b.stretch_mode = TextureButton.STRETCH_KEEP_ASPECT_CENTERED
+	b.custom_minimum_size = dim
+	b.focus_mode = Control.FOCUS_NONE
+	b.tooltip_text = "%s (%d+): %s" % [m.nome, m.min, m.testo]
+	b.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	b.pressed.connect(func(): magia_scelta = k; magia_h1 = Vector2i(-1, -1); _aggiorna())
+	return b
 
 func _legenda(box: VBoxContainer) -> void:
 	box.add_child(ZTema.titoletto("Il terreno", 16))
