@@ -133,10 +133,10 @@ func _menu_partita() -> void:
 	var grafica: String = ZTema.grafica
 	var nomi_grafica := {"originale": "originale del 1979", "nuova": "nuova", "3d": "miniature 3D"}
 	var prossima: String = {"originale": "nuova", "nuova": "3d", "3d": "originale"}[grafica]
-	hud.apri_finestra("Menu", "La partita viene salvata automaticamente dopo ogni azione.\n\n[b]Scontri:[/b] %s\n[b]Mappa:[/b] %s\n[b]Pedine:[/b] %s" % [
+	hud.apri_finestra("Menu", "La partita viene salvata automaticamente dopo ogni azione.\n\n[b]Scontri e tiri:[/b] %s\n[b]Mappa:[/b] %s\n[b]Pedine:[/b] %s" % [
 		"ruota originale" if ruota else "riquadro con la tabella", "originale del 1979" if originale else "nuova edizione (Tabletop Simulator)", nomi_grafica[grafica]], [
 		["Pedine: " + nomi_grafica[prossima], func(): _imposta("grafica", prossima); _menu_partita()],
-		["Scontri: " + ("usa il riquadro" if ruota else "usa la ruota"), func(): _imposta("risoluzione", "riquadro" if ruota else "ruota"); _menu_partita()],
+		["Scontri e tiri: " + ("usa il riquadro" if ruota else "usa la ruota"), func(): _imposta("risoluzione", "riquadro" if ruota else "ruota"); _menu_partita()],
 		["Mappa: " + ("nuova" if originale else "originale"), func(): _imposta("mappa", "nuova" if originale else "originale"); _menu_partita()],
 		["Torna al gioco", Callable()],
 		["Esci al menu principale", func():
@@ -246,8 +246,7 @@ func _presenta_coda() -> void:
 			"combattimento":
 				await _presenta_scontro(e)
 			"tiro":
-				_effetto(e)
-				await get_tree().create_timer(1.3).timeout
+				await _presenta_tiro(e)
 			"scompare":
 				await tavolo.svanisci(int(e.u))
 				tavolo.sincronizza(partita, 0.0)
@@ -269,6 +268,35 @@ func _presenta_coda() -> void:
 	_aggiorna()
 	presentazione_finita.emit()
 
+func _testi_tiro(e: Dictionary) -> Array:
+	var u := partita.pedine[int(e.u)]
+	var b := partita.pedine[int(e.b)]
+	if e.tipo == "visione":
+		return ["VISIONE: FUGA DI %d" % e.fuga if e.fuga > 0 else "VISIONE SENZA EFFETTO", "%s su %s a %d esagoni." % [u.nome(), b.nome(), e.distanza]]
+	var nome: String = {"frecce": "FRECCE", "cavallo": "FRECCE", "dardi": "DARDI"}.get(e.tipo, "VAMPE")
+	var titolo := ("%s: BERSAGLIO ELIMINATO" % nome) if e.eliminato else ("%d %s A SEGNO" % [e.colpi, nome])
+	var testo := "%s su %s a %d esagoni: %d su %d necessarie." % [u.nome(), b.nome(), e.distanza, e.totale, e.servono]
+	if int(e.get("dm", e.dado)) != int(e.dado):
+		testo += " Dado %d, modificato a %d." % [e.dado, e.dm]
+	return [titolo, testo]
+
+## Frecce, fiamme e visioni: l'animazione sul tavolo, poi (se scelta) la ruota
+## originale dei tiri o la metà delle visioni della ruota dei combattimenti.
+func _presenta_tiro(e: Dictionary) -> void:
+	var u := partita.pedine[int(e.u)]
+	var b := partita.pedine[int(e.b)]
+	var tabella: String = {"frecce": "frecce", "fiamme": "fiamme", "visione": "visione"}.get(e.tipo, "")
+	var con_ruota: bool = tabella != "" and impostazioni.get_value("gioco", "risoluzione", "ruota") == "ruota"
+	if not con_ruota:
+		_effetto(e)
+		await get_tree().create_timer(1.3).timeout
+		return
+	await tavolo.lancia(u.hex, b.hex, e.tipo, u.id, b.id)
+	var tt := _testi_tiro(e)
+	var nomi := {"frecce": "Frecce", "fiamme": "Fiamme", "visione": "Visione"}
+	var intro := "%s di %s · distanza %d" % [nomi[tabella], u.nome(), int(e.distanza)]
+	await hud.mostra_ruota(int(e.get("dm", e.dado)), int(e.distanza) - 1, tt[0], tt[1], intro, tabella)
+
 ## Scontro ben visibile: frecce sul tavolo, fascia con i due schieramenti,
 ## poi la ruota originale (o il riquadro, a scelta) con l'esito.
 func _presenta_scontro(e: Dictionary) -> void:
@@ -283,7 +311,7 @@ func _presenta_scontro(e: Dictionary) -> void:
 	var citta := e.has("citta")
 	var coinvolge_umano := _umano_locale(pa) or _umano_locale(pd)
 	tavolo.mostra_scontro(ha, hd, ZTema.OCRA, Color(0.95, 0.15, 0.1))
-	var con_ruota: bool = int(e.dado) > 0 and impostazioni.get_value("gioco", "risoluzione", "ruota") == "ruota" and coinvolge_umano
+	var con_ruota: bool = int(e.dado) > 0 and impostazioni.get_value("gioco", "risoluzione", "ruota") == "ruota"
 	if not hd.is_empty():
 		var dist := minf(tavolo._distanza_obiettivo, 5.5)
 		var punto := tavolo.mondo(hd[0])
@@ -362,12 +390,8 @@ func _effetto(e: Dictionary) -> void:
 			var u := partita.pedine[int(e.u)]
 			var b := partita.pedine[int(e.b)]
 			tavolo.lancia(u.hex, b.hex, e.tipo, u.id, b.id)
-			if e.tipo == "visione":
-				hud.mostra_dado(int(e.dado), "VISIONE: FUGA DI %d" % e.fuga if e.fuga > 0 else "VISIONE SENZA EFFETTO", "%s su %s a %d esagoni." % [u.nome(), b.nome(), e.distanza])
-			else:
-				var nome: String = {"frecce": "FRECCE", "cavallo": "FRECCE", "dardi": "DARDI"}.get(e.tipo, "VAMPE")
-				var titolo := ("%s: BERSAGLIO ELIMINATO" % nome) if e.eliminato else ("%d %s A SEGNO" % [e.colpi, nome])
-				hud.mostra_dado(int(e.dado), titolo, "%s su %s a %d esagoni: %d su %d necessarie." % [u.nome(), b.nome(), e.distanza, e.totale, e.servono])
+			var tt := _testi_tiro(e)
+			hud.mostra_dado(int(e.dado), tt[0], tt[1])
 		"conquista":
 			var h := Vector2i(int(e.h[0]), int(e.h[1])) if e.has("h") else partita.hex_citta(partita.citta[int(e.c)])
 			tavolo.lampo(h, ZTema.OCRA)

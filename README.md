@@ -73,7 +73,7 @@ Nel gioco base ogni esagono ospita un solo pezzo (salvo il fante di scorta). Due
 
 ## Opzioni (menu in partita)
 
-- **Scontri**: *ruota originale* oppure *riquadro*. Con la ruota, il disco fotografato dalla scatola gira sotto il cartoncino del calendario, si ferma sul dado ed evidenzia la fascia della differenza. La ruota si usa per gli scontri che coinvolgono un giocatore umano; quelli fra IA usano il riquadro, più rapido. Le texture sono generate da `tools/genera_ruota.py`.
+- **Scontri e tiri**: *ruota originale* oppure *riquadro*. Con la ruota, il disco fotografato dalla scatola gira sotto il cartoncino del calendario, si ferma sul dado ed evidenzia la fascia del risultato: la ruota dei combattimenti per gli scontri e, sull'altra metà, per le visioni; la ruota dei tiri per frecce e fiamme. Vale per tutti gli scontri e i tiri, anche fra IA. Arciere a cavallo e dardi degli Aracnidi, che hanno tabelle di Zargo's Lords 2 non stampate sulle ruote, usano il riquadro. Le texture sono generate da `tools/genera_ruota.py`.
 - **Mappa**: *nuova* (modulo Tabletop Simulator) oppure *originale* (tabellone 1979). La mappa originale è riallineata esagono per esagono sul reticolo della nuova (`tools/mappa_originale/`); la scansione disponibile è a bassa risoluzione, per cui da vicino appare sfocata.
 
 ## Struttura

@@ -18,8 +18,28 @@ const CENTRI := [-64.1, -38.5, -13.25, 12.75, 39.6, 66.1]
 const R_FASCE := 336.0
 const SP_FASCIA := 120.5
 
+## Le quattro tabelle delle due ruote originali. Ruota dei combattimenti:
+## combattimento (metà destra) e visioni (metà sinistra). Ruota dei tiri:
+## fiamme (metà superiore) e frecce (metà inferiore). Per ogni tabella: angoli
+## dei settori dei dadi 1-6, raggio della prima fascia, spessore delle fasce e
+## arco del contorno attorno alla colonna dei numeri sul cartoncino.
+const TABELLE := {
+	"combattimento": {"disco": "ruota_disco", "coperchio": "ruota_coperchio", "centri": [-64.1, -38.5, -13.25, 12.75, 39.6, 66.1], "r0": 336.0, "sp": 120.5, "contorno": [-99.0, -64.0]},
+	"visione": {"disco": "ruota_disco", "coperchio": "ruota_coperchio", "centri": [113.9, 140.4, 166.75, 193.25, 218.5, 244.1], "r0": 336.0, "sp": 192.8, "contorno": [-114.0, -81.0]},
+	"fiamme": {"disco": "ruota_tiri_disco", "coperchio": "ruota_tiri_coperchio", "centri": [-166.0, -140.0, -114.0, -87.0, -59.0, -32.5], "r0": 308.0, "sp": 193.0, "contorno": [-99.0, -71.0]},
+	"frecce": {"disco": "ruota_tiri_disco", "coperchio": "ruota_tiri_coperchio", "centri": [18.75, 42.5, 67.5, 92.0, 116.0, 141.0], "r0": 338.0, "sp": 119.0, "contorno": [-110.0, -82.0]},
+}
+var tabella := "combattimento"
+
 var disco: Texture2D = preload("res://assets/ui/ruota_disco.png")
 var coperchio: Texture2D = preload("res://assets/ui/ruota_coperchio.png")
+
+func usa(t: String) -> void:
+	tabella = t if TABELLE.has(t) else "combattimento"
+	var d: Dictionary = TABELLE[tabella]
+	disco = load("res://assets/ui/%s.png" % d.disco)
+	coperchio = load("res://assets/ui/%s.png" % d.coperchio)
+	queue_redraw()
 var scala := 0.62                # texture → schermo
 var rotazione := 0.0             # gradi, applicati al disco
 var fascia_evidenziata := -1
@@ -49,9 +69,10 @@ func _draw() -> void:
 	draw_texture(disco, -Vector2(LATO_TEX, LATO_TEX) * 0.5)
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 	# Fascia del risultato, vista attraverso la finestra.
+	var tb: Dictionary = TABELLE[tabella]
 	if fascia_evidenziata >= 0:
-		var r0 := _px(R_FASCE + SP_FASCIA * fascia_evidenziata)
-		var r1 := _px(R_FASCE + SP_FASCIA * (fascia_evidenziata + 1))
+		var r0 := _px(tb.r0 + tb.sp * fascia_evidenziata)
+		var r1 := _px(tb.r0 + tb.sp * (fascia_evidenziata + 1))
 		var alfa := 0.35 + 0.25 * sin(lampeggio * 7.0)
 		_settore(c, r0, r1, -98.0, -82.0, Color(1.0, 0.82, 0.2, alfa))
 	# Cartoncino del calendario con la finestra a T.
@@ -59,9 +80,9 @@ func _draw() -> void:
 	draw_texture(coperchio, Vector2.ZERO)
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 	if fascia_evidenziata >= 0:
-		var r0 := _px(R_FASCE + SP_FASCIA * fascia_evidenziata)
-		var r1 := _px(R_FASCE + SP_FASCIA * (fascia_evidenziata + 1))
-		_contorno(c, r0, r1, -99.0, -64.0, Color(1.0, 0.78, 0.1, 0.95), 3.0)
+		var r0 := _px(tb.r0 + tb.sp * fascia_evidenziata)
+		var r1 := _px(tb.r0 + tb.sp * (fascia_evidenziata + 1))
+		_contorno(c, r0, r1, tb.contorno[0], tb.contorno[1], Color(1.0, 0.78, 0.1, 0.95), 3.0)
 
 func _settore(c: Vector2, r0: float, r1: float, a0: float, a1: float, col: Color) -> void:
 	var pts := PackedVector2Array()
@@ -91,7 +112,7 @@ func _process(delta: float) -> void:
 		queue_redraw()
 
 func angolo_per_dado(dado: int) -> float:
-	return -90.0 - CENTRI[clampi(dado, 1, 6) - 1]
+	return -90.0 - float(TABELLE[tabella].centri[clampi(dado, 1, 6) - 1])
 
 func _imposta_rotazione(v: float) -> void:
 	rotazione = v

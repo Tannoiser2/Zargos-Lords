@@ -345,7 +345,8 @@ func _pannello_ruota() -> void:
 
 ## La ruota sale da sotto la barra di stato, accanto a "fine mossa", gira fino
 ## al dado, evidenzia l'esito e poi ridiscende. Si attende con `await`.
-func mostra_ruota(dado: int, fascia: int, titolo: String, testo: String, intro: String) -> void:
+func mostra_ruota(dado: int, fascia: int, titolo: String, testo: String, intro: String, tabella := "combattimento") -> void:
+	ruota.usa(tabella)
 	var vp := radice.size
 	ruota.scala = clampf((vp.y - 330.0) / (1024.0 * 0.53), 0.42, 0.55)
 	ruota._ridimensiona()

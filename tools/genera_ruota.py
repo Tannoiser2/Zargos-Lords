@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Genera le texture della ruota dei combattimenti dalle fotografie originali.
+"""Genera le texture delle ruote originali (combattimenti e visioni; tiri) dalle fotografie.
 
 - ruota_disco.png: il disco girevole (IMG_6186), ritagliato attorno al rivetto.
 - ruota_coperchio.png: la metà superiore del cartoncino col calendario
@@ -31,30 +31,30 @@ CC = (1470.0, 1419.0)
 A_RAD, B_RAD = 964.0 / 880.0, -23.3
 
 
-def disco():
-    src = np.asarray(Image.open(FOTO / "IMG_6186.jpg").convert("RGB")).astype(np.float32)
+def disco(foto="IMG_6186.jpg", dc=DC, r_bordo=R_BORDO, nome="ruota_disco.png"):
+    src = np.asarray(Image.open(FOTO / foto).convert("RGB")).astype(np.float32)
     yy, xx = np.mgrid[0:LATO, 0:LATO].astype(np.float32)
     dx = (xx + 0.5) / SCALA - R_DISCO
     dy = (yy + 0.5) / SCALA - R_DISCO
-    sx, sy = DC[0] + dx, DC[1] + dy
+    sx, sy = dc[0] + dx, dc[1] + dy
     out = np.zeros((LATO, LATO, 4), np.float32)
     for k in range(3):
         out[..., k] = ndimage.map_coordinates(src[..., k], [sy, sx], order=1, mode="nearest")
     r = np.hypot(dx, dy)
-    out[..., 3] = np.clip((R_BORDO - r) * SCALA * 1.5, 0, 1) * 255
-    Image.fromarray(out.astype(np.uint8), "RGBA").save(OUT / "ruota_disco.png", optimize=True)
+    out[..., 3] = np.clip((r_bordo - r) * SCALA * 1.5, 0, 1) * 255
+    Image.fromarray(out.astype(np.uint8), "RGBA").save(OUT / nome, optimize=True)
 
 
-def coperchio():
-    src = np.asarray(Image.open(FOTO / "IMG_6188.jpg").convert("RGB")).astype(np.float32)
+def coperchio(foto="IMG_6188.jpg", cc=CC, a_rad=A_RAD, b_rad=B_RAD, r_bordo=1395.0, ampiezza=24, nome="ruota_coperchio.png"):
+    src = np.asarray(Image.open(FOTO / foto).convert("RGB")).astype(np.float32)
     alto = int(LATO * 0.62)
     yy, xx = np.mgrid[0:alto, 0:LATO].astype(np.float32)
     dx = (xx + 0.5) / SCALA - R_DISCO
     dy = (yy + 0.5) / SCALA - R_DISCO
     rd = np.hypot(dx, dy)
     th = np.arctan2(dy, dx)
-    rc = (rd - B_RAD) / A_RAD
-    sx, sy = CC[0] + rc * np.cos(th), CC[1] + rc * np.sin(th)
+    rc = (rd - b_rad) / a_rad
+    sx, sy = cc[0] + rc * np.cos(th), cc[1] + rc * np.sin(th)
     out = np.zeros((alto, LATO, 4), np.float32)
     for k in range(3):
         out[..., k] = ndimage.map_coordinates(src[..., k], [sy, sx], order=1, mode="nearest")
@@ -62,10 +62,10 @@ def coperchio():
     lum = rgb.mean(axis=2)
     sat = rgb.max(axis=2) - rgb.min(axis=2)
     # Bordo del cartoncino.
-    alfa = np.clip((1395.0 - rc) * SCALA * 1.5, 0, 1)
+    alfa = np.clip((r_bordo - rc) * SCALA * 1.5, 0, 1)
     # Finestra a T: zona chiara e poco satura vicino alla verticale.
     ang = np.degrees(th) + 90.0
-    zona = (np.abs(ang) < 24) & (rc < 1440) & (rc > 120)
+    zona = (np.abs(ang) < ampiezza) & (rc < 1440) & (rc > 120)
     chiaro = lum > 165
     chiaro = ndimage.binary_opening(chiaro, iterations=2)
     finestra = zona & chiaro
@@ -78,11 +78,15 @@ def coperchio():
     morbido = ndimage.gaussian_filter(finestra.astype(np.float32), 0.8)
     alfa = alfa * (1.0 - morbido)
     out[..., 3] = alfa * 255
-    Image.fromarray(out.astype(np.uint8), "RGBA").save(OUT / "ruota_coperchio.png", optimize=True)
+    Image.fromarray(out.astype(np.uint8), "RGBA").save(OUT / nome, optimize=True)
 
 
 if __name__ == "__main__":
     OUT.mkdir(parents=True, exist_ok=True)
     disco()
     coperchio()
+    # Ruota dei tiri: fiamme (metà superiore) e frecce (metà inferiore) sul
+    # disco IMG_6185, cartoncino con le distanze in IMG_6187.
+    disco("IMG_6185.jpg", (1521.0, 1512.0), 1510.0, "ruota_tiri_disco.png")
+    coperchio("IMG_6187.jpg", (1520.0, 1507.5), 1.01, 0.0, 1488.0, 45, "ruota_tiri_coperchio.png")
     print("ruota generata")

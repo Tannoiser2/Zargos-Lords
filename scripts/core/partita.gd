@@ -1122,7 +1122,7 @@ func _tiro(u: ZPedina, b: ZPedina, eventi: Array) -> void:
 		_: colpi = ZRegole.colpi_arcieri_cavallo(dado_mod, v.distanza)
 	b.colpi += colpi
 	var eliminato: bool = b.colpi >= int(v.servono)
-	eventi.append({"t": "tiro", "tipo": v.tipo, "u": u.id, "b": b.id, "dado": dado, "distanza": v.distanza, "colpi": colpi, "totale": b.colpi, "servono": v.servono, "eliminato": eliminato})
+	eventi.append({"t": "tiro", "tipo": v.tipo, "u": u.id, "b": b.id, "dado": dado, "dm": dado_mod, "distanza": v.distanza, "colpi": colpi, "totale": b.colpi, "servono": v.servono, "eliminato": eliminato})
 	_log("%s di %s su %s: dado %d, distanza %d » %d a segno (%d/%d)." % [{"frecce": "Frecce", "fiamme": "Fiamme", "cavallo": "Frecce", "dardi": "Frecce avvelenate"}[v.tipo], u.nome(), b.nome(), dado, v.distanza, colpi, b.colpi, v.servono])
 	if eliminato:
 		_elimina(b, u.popolo, eventi)
