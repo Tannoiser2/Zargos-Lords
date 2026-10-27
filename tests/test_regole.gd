@@ -307,6 +307,30 @@ func _init() -> void:
 	g.esegui({"a": "ricompari", "u": mon.id, "h": [d0.x, d0.y]})
 	controlla(not g.esegui({"a": "scompari", "u": mon.id}).ok, "chi ricompare non può sparire di nuovo nella stessa mossa")
 
+	print("Tiri sopra il mare")
+	g = partita_vuota()
+	g.fase = ZPartita.FASE_LANCI
+	var coppia := []
+	for rr in range(4, g.mappa.righe - 4):
+		for cc in range(4, g.mappa.colonne - 4):
+			var h0 := Vector2i(cc, rr)
+			if g.mappa.terreno(h0) != ZMappa.T.PIANURA:
+				continue
+			for dir in 6:
+				var l := g.mappa.linea(h0, dir, 3)
+				if l.size() == 3 and g.mappa.terreno(l[0]) == ZMappa.T.MARE and g.mappa.terreno(l[1]) == ZMappa.T.MARE and g.mappa.terreno(l[2]) == ZMappa.T.PIANURA:
+					coppia = [h0, l[2]]
+					break
+			if not coppia.is_empty():
+				break
+		if not coppia.is_empty():
+			break
+	var arc0 := metti(g, "Cavalieri", "fantarcere", coppia[0])
+	var mago0 := metti(g, "Cavalieri", "mago", g.mappa.vicini_terra(coppia[0])[0])
+	var bers_m := metti(g, "Monaci", "fante", coppia[1])
+	controlla(not g.valuta_tiro(arc0, bers_m).ok, "le frecce non passano sopra il mare")
+	controlla(g.mappa.distanza(mago0.hex, bers_m.hex) > 5 or not g.valuta_tiro(mago0, bers_m).ok, "neppure le visioni")
+
 	print("Pile nel gioco base")
 	g = partita_vuota()
 	p = pianura_aperta(g)

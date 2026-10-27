@@ -1064,6 +1064,9 @@ func valuta_tiro(u: ZPedina, b: ZPedina) -> Dictionary:
 		if tipo == "dardi":
 			serve -= 1   # le frecce avvelenate sono più efficaci
 		return {"ok": true, "tipo": tipo, "distanza": d, "servono": serve, "gia": b.colpi}
+	var ostacolo := _linea_di_tiro(u, b)
+	if ostacolo != "":
+		return {"ok": false, "errore": ostacolo}
 	if tipo == "fiamme":
 		var serve: int = ZRegole.VAMPE_NECESSARIE[_tab_popolo(b)][b.tipo]
 		if serve == 0:
@@ -1074,27 +1077,67 @@ func valuta_tiro(u: ZPedina, b: ZPedina) -> Dictionary:
 func _tab_popolo(b: ZPedina) -> String:
 	return "Magia" if b.tipo == "megadrago" else b.popolo
 
-func _linea_di_tiro(u: ZPedina, b: ZPedina) -> String:
-	if terreno(u.hex) == ZMappa.T.BOSCO and u.citta < 0:
-		return "Non si può tirare da dentro un bosco."
-	if terreno(b.hex) == ZMappa.T.BOSCO:
-		return "Non si può tirare dentro un bosco."
-	if zl2():
-		# Zargo's Lords 2, regola D: le frecce si tirano in qualsiasi direzione.
-		return ""
-	var dir := mappa.direzione_retta(u.hex, b.hex, 8)
-	if dir < 0:
-		return "Le frecce volano soltanto in linea retta lungo gli esagoni."
-	var h := u.hex
-	while true:
-		h = mappa.vicino_dir(h, dir)
-		if h == b.hex:
+## Esagoni attraversati dal tiro, esclusi tiratore e bersaglio: la retta fra i
+## centri (o, attraverso le cuciture dei bordi, il percorso più breve).
+func esagoni_in_mezzo(a: Vector2i, b: Vector2i) -> Array[Vector2i]:
+	var out: Array[Vector2i] = []
+	var d := mappa.distanza(a, b)
+	var pa := mappa.centro_px(a)
+	var pb := mappa.centro_px(b)
+	if pa.distance_to(pb) <= (d + 0.5) * mappa.raggio_px * sqrt(3.0):
+		var passi := maxi(2, d * 6)
+		for i in range(1, passi):
+			var h := mappa.esagono_da_px(pa.lerp(pb, i / float(passi)))
+			if h != a and h != b and h not in out:
+				out.append(h)
+		return out
+	var h := a
+	while h != b and out.size() < 20:
+		var migliore := h
+		for v in mappa.vicino_geometrico_tutti(h):
+			if mappa.distanza(v, b) < mappa.distanza(migliore, b):
+				migliore = v
+		if migliore == h:
 			break
+		h = migliore
+		if h != b:
+			out.append(h)
+	return out
+
+func _linea_di_tiro(u: ZPedina, b: ZPedina) -> String:
+	var tipo := tipo_tiro(u)
+	var frecce := tipo in ["frecce", "cavallo", "dardi"]
+	if frecce:
+		if terreno(u.hex) == ZMappa.T.BOSCO and u.citta < 0:
+			return "Non si può tirare da dentro un bosco."
+		if terreno(b.hex) == ZMappa.T.BOSCO:
+			return "Non si può tirare dentro un bosco."
+	if zl2() and terreno(b.hex) == ZMappa.T.MONTAGNA:
+		return "Non si tira dentro una montagna."
+	var lungo: Array[Vector2i] = []
+	if tipo == "frecce" and not zl2():
+		# Gioco base: le frecce volano soltanto in linea retta lungo gli esagoni.
+		var dir := mappa.direzione_retta(u.hex, b.hex, 8)
+		if dir < 0:
+			return "Le frecce volano soltanto in linea retta lungo gli esagoni."
+		var h := u.hex
+		while true:
+			h = mappa.vicino_dir(h, dir)
+			if h == b.hex:
+				break
+			lungo.append(h)
+	else:
+		lungo = esagoni_in_mezzo(u.hex, b.hex)
+	for h in lungo:
 		var t := terreno(h)
-		if t in [ZMappa.T.MONTAGNA, ZMappa.T.BOSCO, ZMappa.T.GORGO]:
-			return "La linea di tiro è bloccata da %s." % ZMappa.NOMI_TERRENO[t].to_lower()
+		if t in [ZMappa.T.MARE, ZMappa.T.PONTE, ZMappa.T.VUOTO]:
+			return "Frecce, fiamme e visioni non passano sopra il mare né sopra i ponti di nuvole."
 		if not citta_in(h).is_empty():
 			return "Una città blocca la linea di tiro."
+		if t == ZMappa.T.MONTAGNA or t == ZMappa.T.GORGO:
+			return "La linea di tiro è bloccata da %s." % ZMappa.NOMI_TERRENO[t].to_lower()
+		if frecce and t == ZMappa.T.BOSCO:
+			return "La linea di tiro è bloccata da un bosco."
 	return ""
 
 func _tiro(u: ZPedina, b: ZPedina, eventi: Array) -> void:

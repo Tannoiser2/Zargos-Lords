@@ -128,5 +128,6 @@ Alcuni punti del regolamento sono ambigui. Le scelte fatte qui sono queste:
 - Le guarnigioni sono coperte: non esercitano zona d'influenza e i Maghi in città non danno il +2 ai pezzi fuori.
 - Fantarcieri e Lanciafiamme in attacco possono solo tirare; Maghi, Illusionisti e Signori Draghi scelgono fra lancio e corpo a corpo (chi lancia non combatte più in quella mossa).
 - Il segnalino di sparizione dei Monaci non blocca l'esagono.
+- Frecce, fiamme e visioni non passano sopra il mare, i ponti di nuvole, le montagne, i gorghi e le città (le frecce neanche sopra i boschi); in Zargo's Lords 2 lo dice il regolamento, nel gioco base è un'interpretazione.
 - Lo scambio degli ostaggi nelle alleanze non è ancora implementato.
 - ZL2: la Voragine di fiamme dà mezza città (o metà dei punti in guerra lampo); il Mega drago combatte solo nella mossa in cui è evocato; le Pantere tornano Donne o fanti all'inizio della mossa successiva delle Amazzoni.
