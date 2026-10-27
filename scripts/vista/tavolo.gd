@@ -290,6 +290,7 @@ func _pila(g: ZPartita, u: ZPedina) -> Array:
 
 func _posizione_pedina(g: ZPartita, u: ZPedina) -> Vector3:
 	var p := mondo(u.hex)
+	p.y += altezza_terreno(g, u.hex)
 	var pl := _pila(g, u)
 	if pl[1] >= 2:
 		var lato := -1.0 if pl[0] == 0 else 1.0
@@ -353,6 +354,7 @@ func sincronizza(g: ZPartita, durata := 0.25) -> void:
 			else:
 				s.elimina_animato()
 	_aggiorna_segni(g)
+	aggiorna_terreno_3d(g)
 	for ci in g.citta:
 		if ci.h[0] < 0:
 			if citta.has(ci.id):
@@ -404,6 +406,143 @@ func _aggiorna_segni(g: ZPartita) -> void:
 	if not _overlay.has("varchi"):
 		_crea_overlay("varchi")
 	evidenzia("varchi", varchi, Color(0.85, 0.65, 0.35, 0.45))
+
+# --- Terreno in 3D (miniature Meshy nello stile della mappa di Riboldi) -------------
+
+const MODELLI_TERRENO := {
+	"montagna": "res://assets/modelli/terreno/montagna.glb",
+	"bosco": "res://assets/modelli/terreno/bosco.glb",
+	"gorgo": "res://assets/modelli/terreno/gorgo.glb",
+	"ponte": "res://assets/modelli/terreno/ponte.glb",
+}
+## Altezza dei rilievi: i pezzi che vi sostano poggiano sopra.
+const ALTEZZA_RILIEVO := {"montagna": 0.15, "bosco": 0.085, "gorgo": 0.035}
+var _terreno3d: Node3D
+var _chiave_terreno := ""
+static var _cache_modelli := {}
+
+func _tipo_rilievo(t: int) -> String:
+	match t:
+		ZMappa.T.MONTAGNA: return "montagna"
+		ZMappa.T.BOSCO: return "bosco"
+		ZMappa.T.GORGO: return "gorgo"
+	return ""
+
+func altezza_terreno(g: ZPartita, h: Vector2i) -> float:
+	if ZTema.grafica != "3d" or g == null:
+		return 0.0
+	if not g.citta_in(h).is_empty():
+		return 0.0
+	return float(ALTEZZA_RILIEVO.get(_tipo_rilievo(g.terreno(h)), 0.0))
+
+## Mesh, materiale e ingombro di un modello del terreno (prima MeshInstance).
+func _modello(nome: String) -> Dictionary:
+	if _cache_modelli.has(nome):
+		return _cache_modelli[nome]
+	var d := {}
+	var sc: PackedScene = load(MODELLI_TERRENO[nome]) if ResourceLoader.exists(MODELLI_TERRENO[nome]) else null
+	if sc:
+		var n := sc.instantiate()
+		var trovati := n.find_children("*", "MeshInstance3D", true, false)
+		if not trovati.is_empty():
+			var mi: MeshInstance3D = trovati[0]
+			var t := Transform3D.IDENTITY
+			var x: Node = mi
+			while x != null and x != n:
+				if x is Node3D:
+					t = (x as Node3D).transform * t
+				x = x.get_parent()
+			d = {"mesh": mi.mesh, "base": t, "box": t * mi.get_aabb()}
+		n.free()
+	_cache_modelli[nome] = d
+	return d
+
+func _multi(nome: String, trasformazioni: Array) -> void:
+	var d := _modello(nome)
+	if d.is_empty() or trasformazioni.is_empty():
+		return
+	var mm := MultiMesh.new()
+	mm.transform_format = MultiMesh.TRANSFORM_3D
+	mm.mesh = d.mesh
+	mm.instance_count = trasformazioni.size()
+	for i in trasformazioni.size():
+		mm.set_instance_transform(i, trasformazioni[i] * d.base)
+	var mmi := MultiMeshInstance3D.new()
+	mmi.multimesh = mm
+	mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+	_terreno3d.add_child(mmi)
+
+## Montagne, boschi, gorghi e ponti di nuvole in rilievo, solo con la grafica 3D.
+## Gli esagoni con una città restano piatti.
+func aggiorna_terreno_3d(g: ZPartita) -> void:
+	var chiave := ""
+	if ZTema.grafica == "3d" and g != null:
+		var parti: PackedStringArray = []
+		for ci in g.citta:
+			parti.append("%d,%d" % [ci.h[0], ci.h[1]])
+		parti.append(str(g.terreno_mod.keys()))
+		parti.append(str(g.ponti_temp))
+		chiave = ";".join(parti)
+	if chiave == _chiave_terreno:
+		return
+	_chiave_terreno = chiave
+	if _terreno3d:
+		_terreno3d.queue_free()
+		_terreno3d = null
+	if chiave == "":
+		return
+	_terreno3d = Node3D.new()
+	add_child(_terreno3d)
+	var r_hex := mappa.raggio_px / SCALA
+	var gruppi := {"montagna": [], "bosco": [], "gorgo": []}
+	var caso := RandomNumberGenerator.new()
+	for y in mappa.righe:
+		for x in mappa.colonne:
+			var h := Vector2i(x, y)
+			var tipo := _tipo_rilievo(g.terreno(h))
+			if tipo == "" or not g.citta_in(h).is_empty():
+				continue
+			caso.seed = x * 1000 + y
+			var d := _modello(tipo)
+			if d.is_empty():
+				continue
+			var box: AABB = d.box
+			var alt: float = ALTEZZA_RILIEVO[tipo]
+			# Altezza del rilievo e larghezza pari all'esagono; il gorgo resta basso.
+			var s_xz := r_hex * 1.75 / maxf(box.size.x, box.size.z)
+			var s_y := alt / maxf(box.size.y, 0.001)
+			if tipo == "gorgo":
+				s_y = s_xz * 0.6
+			var base := Basis.from_euler(Vector3(0, caso.randf() * TAU if tipo != "montagna" else deg_to_rad(60.0 * caso.randi_range(0, 5)), 0)) * Basis.from_scale(Vector3(s_xz, s_y, s_xz))
+			var centro := Vector3(box.position.x + box.size.x * 0.5, box.position.y, box.position.z + box.size.z * 0.5)
+			var t := Transform3D(base, mondo(h) - base * centro)
+			gruppi[tipo].append(t)
+	for k in gruppi:
+		_multi(k, gruppi[k])
+	# Ponti di nuvole, fissi e temporanei (Ponte di pensiero).
+	var ponti := []
+	for c in mappa.coppie_ponti():
+		ponti.append(c)
+	for pt in g.ponti_temp:
+		ponti.append([Vector2i(int(pt[0][0]), int(pt[0][1])), Vector2i(int(pt[1][0]), int(pt[1][1]))])
+	var tp := []
+	var dp := _modello("ponte")
+	if not dp.is_empty():
+		var box: AABB = dp.box
+		var lungo := box.size.x >= box.size.z
+		for c in ponti:
+			var a := mondo(c[0])
+			var b := mondo(c[1])
+			var v := b - a
+			var l := v.length()
+			var s_l := l * 0.95 / (box.size.x if lungo else box.size.z)
+			var s_w := r_hex * 0.7 / (box.size.z if lungo else box.size.x)
+			var ang := atan2(-v.z, v.x) if lungo else atan2(v.x, v.z)
+			var sc := Vector3(s_l, s_l * 0.5, s_w) if lungo else Vector3(s_w, s_l * 0.5, s_l)
+			var base := Basis(Vector3.UP, ang) * Basis.from_scale(sc)
+			var centro := Vector3(box.position.x + box.size.x * 0.5, box.position.y, box.position.z + box.size.z * 0.5)
+			tp.append(Transform3D(base, (a + b) * 0.5 - base * centro))
+	_multi("ponte", tp)
 
 func segnalino(id: int) -> ZSegnalino:
 	return segnalini.get(id)

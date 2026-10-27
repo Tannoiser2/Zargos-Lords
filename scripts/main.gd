@@ -484,7 +484,7 @@ func _fine_partita() -> void:
 	var ordine := partita.popoli.duplicate()
 	ordine.sort_custom(func(a, b): return partita.citta_di(a) > partita.citta_di(b))
 	for p in ordine:
-		righe += "[b]%s[/b]: %d città, %d pezzi\n" % [p, partita.citta_di(p), partita.pedine_di(p).size()]
+		righe += "%s  [b]%s[/b]: %d città, %d pezzi\n" % [ZTema.bb_ritratto(p, 40), p, partita.citta_di(p), partita.pedine_di(p).size()]
 	var titolo := "Vincono %s" % " e ".join(partita.vincitori.map(func(p): return ZRegole.gli(p)))
 	hud.apri_finestra(titolo, "L'Anno di Zargo è giunto al termine.\n\n" + righe, [["Guarda il tavolo", Callable()], ["Nuova partita", _apri_menu]])
 
@@ -822,7 +822,7 @@ func _controlla_proposte() -> void:
 			_proposte_mostrate[k] = true
 			var da := parti[0]
 			var a := parti[1]
-			hud.apri_finestra("Proposta d'alleanza", "%s propongono un'alleanza %s.\n\nGli alleati non si attaccano e possono attraversare le rispettive linee. L'alleanza però non è mai vincolante: chiunque può tradirla prima della propria mossa." % [ZRegole.Gli(da), ZRegole.agli(a)], [
+			hud.apri_finestra("Proposta d'alleanza", ZTema.bb_ritratto(da, 56) + "  " + ZTema.bb_ritratto(a, 56) + "\n\n%s propongono un'alleanza %s.\n\nGli alleati non si attaccano e possono attraversare le rispettive linee. L'alleanza però non è mai vincolante: chiunque può tradirla prima della propria mossa." % [ZRegole.Gli(da), ZRegole.agli(a)], [
 				["Rifiuta", func(): _applica({"a": "rispondi", "da": da, "a2": a, "si": false})],
 				["Accetta", func(): _applica({"a": "rispondi", "da": da, "a2": a, "si": true})],
 			], 480)
@@ -838,8 +838,7 @@ func _aggiorna() -> void:
 	var p := partita.popolo_di_mano()
 	hud.calendario.imposta(partita.mese)
 	hud.lbl_mese.text = "IL CALENDARIO · MESE %d DI 25" % partita.mese
-	hud.gettone_turno.colore = ZRegole.COLORI.get(p, Color.WHITE)
-	hud.gettone_turno.queue_redraw()
+	hud.imposta_ritratto_turno(p)
 	var chi := ""
 	if partita.fase != ZPartita.FASE_FINITA:
 		chi = "tocca a te" if _mio(p) else ("intelligenza artificiale" if partita.controllo.get(p) == "ia" else "giocatore remoto" if in_online else "")
@@ -890,15 +889,7 @@ func _aggiorna_popoli() -> void:
 		var riga := HBoxContainer.new()
 		riga.add_theme_constant_override("separation", 8)
 		# Ritratto del Signore, con il colore del popolo sotto.
-		var cornice := PanelContainer.new()
-		cornice.add_theme_stylebox_override("panel", ZTema.riquadro(Color(ZRegole.COLORI[p], 0.35 if attivo else 0.18), ZRegole.COLORI[p].darkened(0.3), 2 if attivo else 1, 4, 1))
-		var img := TextureRect.new()
-		img.texture = ZTema.ritratto_signore(p)
-		img.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-		img.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-		img.custom_minimum_size = Vector2(34, 40)
-		cornice.add_child(img)
-		riga.add_child(cornice)
+		riga.add_child(ZTema.ritratto(p, 40, attivo))
 		var v := VBoxContainer.new()
 		v.add_theme_constant_override("separation", 0)
 		v.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -1026,8 +1017,9 @@ func _aggiorna_selezione() -> void:
 			if q == p:
 				continue
 			var riga := HBoxContainer.new()
-			riga.add_child(ZWidget.Gettone.new(ZRegole.COLORI[q], 14))
+			riga.add_child(ZTema.ritratto(q, 40))
 			var l := ZTema.etichetta(q, 15, ZTema.INCHIOSTRO, ZTema.testo_forte)
+			l.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 			l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 			riga.add_child(l)
 			if partita.alleati(p, q):
@@ -1081,7 +1073,12 @@ func _aggiorna_selezione() -> void:
 			box.add_child(_scheda_pedina(partita.pedine[u.scorta]))
 	elif citta_sel >= 0:
 		var ci: Dictionary = partita.citta[citta_sel]
-		box.add_child(ZTema.titoletto("Città %s" % ZRegole.degli(ci.p), 20, ZRegole.COLORI[ci.p].darkened(0.5)))
+		var tc := HBoxContainer.new()
+		tc.add_child(ZTema.ritratto(ci.p, 40))
+		var lc := ZTema.titoletto("Città %s" % ZRegole.degli(ci.p), 20, ZRegole.COLORI[ci.p].darkened(0.5))
+		lc.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		tc.add_child(lc)
+		box.add_child(tc)
 		if ci.orig != ci.p:
 			box.add_child(ZTema.etichetta("Conquistata %s" % ZRegole.agli(ci.orig), 13, ZTema.CUOIO))
 		if _mio(ci.p) or (not in_online and partita.controllo.get(ci.p) == "umano" and ci.p == p):

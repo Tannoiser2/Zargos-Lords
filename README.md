@@ -46,6 +46,7 @@ Pubblicazione: https://tannoiser2.github.io/Zargos-Lords/
   - palette cuoio e avorio delle ruote;
   - titoli in un bastone condensato come il logo della scatola (Anton), testi in un geometrico alla Futura come le ruote (Jost);
   - calendario a 25 cerchi con i mesi barrati;
+  - ogni popolo è rappresentato dal ritratto del suo Signore (pannello, diplomazia, città, barra in alto, finestre);
   - anteprima di ogni scontro come uno "spicchio" della ruota dei combattimenti, con l'esito per ciascuna faccia del dado.
 - **Tavolo 3D**:
   - pedine di cartone esagonali con le illustrazioni originali, rigenerate in alta risoluzione da `tools/genera_pedine.py`;
@@ -67,7 +68,7 @@ Si sceglie nel menu iniziale (in alto a destra) o dal menu in partita; anche i r
 
 - **Originali 1979**: le scansioni dei fogli di pedine (`assets/units`).
 - **Nuova grafica**: le nuove illustrazioni in `docs/nuova_grafica`, riportate su esagoni a punta in alto con il bordo del colore del popolo da `tools/genera_pedine_nuove.py` (`assets/units_nuove`).
-- **Miniature 3D**: 25 modelli generati con Meshy (image-to-3D, topologia leggera da 8000 triangoli, texture ridotte a 1024 px) a partire dalle nuove illustrazioni, in piedi su basi con i soli valori (`assets/units_basi`, da `tools/genera_basi.py`; modelli in `assets/modelli/<popolo>/<tipo>.glb`). Anche le sei città hanno la loro miniatura. Nel pannello laterale e nel vassoio si vede il rendering della miniatura; il segnalino di sparizione resta una pedina piatta, i pezzi ridotti diventano miniature grigie; la Pantera nata da un fante usa la stessa miniatura della Pantera, il Mega drago quella del Signore Drago ingrandita. Gli ID dei task Meshy sono in `docs/nuova_grafica/meshy_task.txt`.
+- **Miniature 3D**: 25 modelli generati con Meshy (image-to-3D, topologia leggera da 8000 triangoli, texture ridotte a 1024 px) a partire dalle nuove illustrazioni, in piedi su basi con i soli valori (`assets/units_basi`, da `tools/genera_basi.py`; modelli in `assets/modelli/<popolo>/<tipo>.glb`). Anche le sei città hanno la loro miniatura. Nel pannello laterale e nel vassoio si vede il rendering della miniatura; il segnalino di sparizione resta una pedina piatta, i pezzi ridotti diventano miniature grigie; la Pantera nata da un fante usa la stessa miniatura della Pantera, il Mega drago quella del Signore Drago ingrandita. Con le miniature anche il terreno è in rilievo: montagne, boschi, gorghi e ponti di nuvole sono modelli Meshy (`assets/modelli/terreno`) ricavati da illustrazioni nello stile della mappa originale di Riboldi; i pezzi su montagne, boschi e gorghi poggiano sopra il rilievo, gli esagoni con una città restano piatti. Gli ID dei task Meshy sono in `docs/nuova_grafica/meshy_task.txt`.
 
 Nel gioco base ogni esagono ospita un solo pezzo (salvo il fante di scorta). Due pezzi nello stesso esagono (pila di Zargo's Lords 2, che ammette al massimo due pedine per esagono, o fante di scorta) sono mostrati affiancati e rimpiccioliti dentro l'esagono.
 

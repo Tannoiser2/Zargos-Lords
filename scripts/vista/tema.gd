@@ -157,14 +157,40 @@ static func texture_pedina(popolo: String, tipo: String) -> Texture2D:
 	return load(percorso_pedina(popolo, tipo))
 
 ## Disegno del Signore per il menu, coerente con la grafica scelta.
-static func ritratto_signore(popolo: String) -> Texture2D:
+static func percorso_ritratto(popolo: String) -> String:
 	var p := popolo.to_lower()
 	var cartelle := {"originale": ["signori"], "nuova": ["signori_nuovi", "signori"], "3d": ["signori_3d", "signori_nuovi", "signori"]}
 	for c in cartelle.get(grafica, ["signori"]):
 		var f := "res://assets/ui/%s/%s.png" % [c, p]
 		if ResourceLoader.exists(f):
-			return load(f)
-	return null
+			return f
+	return ""
+
+static func ritratto_signore(popolo: String) -> Texture2D:
+	var f := percorso_ritratto(popolo)
+	return load(f) if f != "" else null
+
+## Ritratto del Signore in una cornice del colore del popolo: è il simbolo del
+## popolo in tutta l'interfaccia.
+static func ritratto(popolo: String, altezza := 40.0, evidenziato := false) -> Control:
+	var col: Color = ZRegole.COLORI.get(popolo, AVORIO)
+	var cornice := PanelContainer.new()
+	cornice.add_theme_stylebox_override("panel", riquadro(Color(col, 0.35 if evidenziato else 0.18), col.darkened(0.3), 2 if evidenziato else 1, 4, 1))
+	cornice.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	cornice.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var img := TextureRect.new()
+	img.texture = ritratto_signore(popolo)
+	img.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	img.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	img.custom_minimum_size = Vector2(altezza * 0.85, altezza)
+	img.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	cornice.add_child(img)
+	return cornice
+
+## Ritratto da inserire nel testo BBCode delle finestre.
+static func bb_ritratto(popolo: String, altezza := 44) -> String:
+	var f := percorso_ritratto(popolo)
+	return "[img height=%d]%s[/img]" % [altezza, f] if f != "" else ""
 
 ## Miniatura 3D del pezzo, se esiste.
 static func percorso_modello(popolo: String, tipo: String) -> String:

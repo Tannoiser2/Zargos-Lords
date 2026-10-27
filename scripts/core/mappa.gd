@@ -58,6 +58,15 @@ func carica(percorso: String) -> void:
 	for coppia in d.bridges:
 		_collega(_ponti, Vector2i(coppia[0][0], coppia[0][1]), Vector2i(coppia[1][0], coppia[1][1]))
 
+## Coppie di estremità dei ponti di nuvole, ognuna una volta sola.
+func coppie_ponti() -> Array:
+	var out := []
+	for a in _ponti:
+		for b in _ponti[a]:
+			if a.x < b.x or (a.x == b.x and a.y < b.y):
+				out.append([a, b])
+	return out
+
 func _collega(dove: Dictionary, a: Vector2i, b: Vector2i) -> void:
 	if not dove.has(a):
 		dove[a] = []

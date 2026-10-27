@@ -13,7 +13,18 @@ const LARGHEZZA_PANNELLO := 360
 
 var radice: Control
 var calendario: ZWidget.Calendario
-var gettone_turno: ZWidget.Gettone
+var box_ritratto_turno: HBoxContainer
+var _ritratto_turno := ""
+
+func imposta_ritratto_turno(p: String) -> void:
+	var k := p + ZTema.grafica
+	if k == _ritratto_turno:
+		return
+	_ritratto_turno = k
+	for c in box_ritratto_turno.get_children():
+		c.queue_free()
+	if p != "":
+		box_ritratto_turno.add_child(ZTema.ritratto(p, 44, true))
 var lbl_turno: Label
 var lbl_fase: Label
 var lbl_mese: Label
@@ -77,9 +88,9 @@ func _barra_alta() -> void:
 	h.add_child(cal_box)
 	var turno_box := HBoxContainer.new()
 	turno_box.add_theme_constant_override("separation", 10)
-	gettone_turno = ZWidget.Gettone.new(Color.WHITE, 26)
-	gettone_turno.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	turno_box.add_child(gettone_turno)
+	box_ritratto_turno = HBoxContainer.new()
+	box_ritratto_turno.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	turno_box.add_child(box_ritratto_turno)
 	var tb := VBoxContainer.new()
 	tb.add_theme_constant_override("separation", -2)
 	tb.size_flags_vertical = Control.SIZE_SHRINK_CENTER

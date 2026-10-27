@@ -29,3 +29,11 @@ alati_citta 01a17d3e-9fa5-72e3-8dc1-652ce03a1c04
 monaci_citta 01a17d3e-a86c-738f-bae2-a6d27cb6b140
 amazzoni_citta 01a17d3e-b105-75e2-a818-1f650982717d
 aracnidi_citta 01a17d3e-b9f2-7123-bd03-1eff4890012b
+montagna 01a17df9-5fd3-72c4-bf23-74fb3af60855
+bosco 01a17df9-65b3-71d5-9fe5-c554e1021769
+gorgo 01a17df9-6adf-70c9-9c46-1cec2d7d18dd
+ponte 01a17df9-6f74-7127-8169-04e05072a317
+montagna 01a17dfa-27d9-72fe-88e2-a4a8912161af
+bosco 01a17dfa-2e43-7220-8e4b-718e538da7a4
+gorgo 01a17dfa-33d0-764d-b663-85378ac8bc0a
+ponte 01a17dfa-3b37-776c-ada6-d0d701feb860
