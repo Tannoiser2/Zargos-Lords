@@ -109,12 +109,17 @@ func prepara(p_id: int, p_popolo: String, p_tipo: String, citta := false) -> voi
 	etichetta.outline_size = 14
 	etichetta.modulate = ZTema.AVORIO
 	etichetta.outline_modulate = ZTema.INCHIOSTRO
-	etichetta.position = Vector3(0, spessore + 0.11, 0)
+	etichetta.position = Vector3(0, spessore + (ALTEZZA_MODELLO + 0.06 if _figura else 0.11), 0)
 	etichetta.no_depth_test = true
 	etichetta.visible = false
 	add_child(etichetta)
 
 static func percorso_faccia(p_popolo: String, t: String) -> String:
+	# Con le miniature 3D la pedina diventa una base con i soli valori.
+	if ZTema.grafica == "3d" and t not in ["retro", "scomparso"] and ZTema.percorso_modello(p_popolo, t) != "":
+		var base := "res://assets/units_basi/%s/%s.png" % ["magia" if t == "megadrago" else p_popolo.to_lower(), t]
+		if ResourceLoader.exists(base):
+			return base
 	match t:
 		"retro": return "res://assets/units/retro.png"
 		"megadrago": return "res://assets/units/magia/megadrago.png"
@@ -136,6 +141,7 @@ static func _dati_modello(percorso: String) -> Dictionary:
 		var n := scena.instantiate()
 		var box := AABB()
 		var primo := true
+		var punti := PackedVector3Array()
 		for mi in n.find_children("*", "MeshInstance3D", true, false):
 			var m := mi as MeshInstance3D
 			var t := Transform3D.IDENTITY
@@ -145,6 +151,10 @@ static func _dati_modello(percorso: String) -> Dictionary:
 					t = (x as Node3D).transform * t
 				x = x.get_parent()
 			var b := t * m.get_aabb()
+			if m.mesh:
+				for k in m.mesh.get_surface_count():
+					for v in m.mesh.surface_get_arrays(k)[Mesh.ARRAY_VERTEX]:
+						punti.append(t * v)
 			box = b if primo else box.merge(b)
 			primo = false
 		n.free()
@@ -154,13 +164,23 @@ static func _dati_modello(percorso: String) -> Dictionary:
 			s = minf(s, RAGGIO * 2.6 / maxf(box.size.x, box.size.z))
 			d.scala = s
 			d.centro = Vector3(box.position.x + box.size.x * 0.5, box.position.y, box.position.z + box.size.z * 0.5)
+			# Centra la miniatura sui punti d'appoggio (piedi, zampe), non sulle armi sporgenti.
+			var soglia := box.position.y + box.size.y * 0.12
+			var somma := Vector3.ZERO
+			var conta := 0
+			for v in punti:
+				if v.y <= soglia:
+					somma += v
+					conta += 1
+			if conta > 20:
+				d.centro = Vector3(somma.x / conta, box.position.y, somma.z / conta)
 	_modelli[percorso] = d
 	return d
 
 ## Mostra (o toglie) la miniatura sopra la pedina.
 func figura(t: String) -> void:
 	var percorso := ""
-	if ZTema.grafica == "3d" and t not in ["retro", "scomparso", "citta"]:
+	if ZTema.grafica == "3d" and t not in ["retro", "scomparso"]:
 		percorso = ZTema.percorso_modello(popolo, t)
 	if percorso == _figura_tipo:
 		return
@@ -168,6 +188,8 @@ func figura(t: String) -> void:
 	if _figura:
 		_figura.queue_free()
 		_figura = null
+		if etichetta:
+			etichetta.position.y = SPESSORE * (1.6 if tipo == "citta" else 1.0) + 0.11
 	if percorso == "":
 		return
 	var d := _dati_modello(percorso)
@@ -176,10 +198,16 @@ func figura(t: String) -> void:
 	_figura = Node3D.new()
 	var n: Node3D = d.scena.instantiate()
 	var sc: float = d.scala * (1.35 if t == "megadrago" else 1.0)
+	if t == "citta":
+		# Le città sono più larghe e restano dentro il loro esagono.
+		sc = d.scala * 0.95
 	n.scale = Vector3.ONE * sc
 	n.position = -d.centro * sc
 	_figura.add_child(n)
-	_figura.position.y = SPESSORE
+	var sp := SPESSORE * (1.6 if tipo == "citta" else 1.0)
+	_figura.position.y = sp
+	if etichetta:
+		etichetta.position.y = sp + ALTEZZA_MODELLO + 0.06
 	for mi in n.find_children("*", "MeshInstance3D", true, false):
 		(mi as MeshInstance3D).cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
 	corpo.add_child(_figura)

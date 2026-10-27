@@ -64,7 +64,9 @@ Si sceglie nel menu iniziale (in alto a destra) o dal menu in partita; anche i r
 
 - **Originali 1979**: le scansioni dei fogli di pedine (`assets/units`).
 - **Nuova grafica**: le nuove illustrazioni in `docs/nuova_grafica`, riportate su esagoni a punta in alto con il bordo del colore del popolo da `tools/genera_pedine_nuove.py` (`assets/units_nuove`).
-- **Miniature 3D**: 25 modelli generati con Meshy (image-to-3D, topologia leggera da 8000 triangoli, texture ridotte a 1024 px) a partire dalle nuove illustrazioni, in piedi sulle pedine (`assets/modelli/<popolo>/<tipo>.glb`). Città, segnalino di sparizione e pezzi ridotti restano pedine piatte; la Pantera nata da un fante usa la stessa miniatura della Pantera, il Mega drago quella del Signore Drago ingrandita. Gli ID dei task Meshy sono in `docs/nuova_grafica/meshy_task.txt`.
+- **Miniature 3D**: 25 modelli generati con Meshy (image-to-3D, topologia leggera da 8000 triangoli, texture ridotte a 1024 px) a partire dalle nuove illustrazioni, in piedi su basi con i soli valori (`assets/units_basi`, da `tools/genera_basi.py`; modelli in `assets/modelli/<popolo>/<tipo>.glb`). Anche le sei città hanno la loro miniatura; segnalino di sparizione e pezzi ridotti restano pedine piatte; la Pantera nata da un fante usa la stessa miniatura della Pantera, il Mega drago quella del Signore Drago ingrandita. Gli ID dei task Meshy sono in `docs/nuova_grafica/meshy_task.txt`.
+
+Due pezzi nello stesso esagono (pila di Zargo's Lords 2, che ammette al massimo due pedine per esagono, o fante di scorta) sono mostrati affiancati e rimpiccioliti dentro l'esagono.
 
 ## Opzioni (menu in partita)
 

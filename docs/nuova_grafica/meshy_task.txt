@@ -23,3 +23,9 @@ monaci_cavaliere 01a17d2e-3219-75fc-87a8-2ee5bad8dc12
 monaci_fante 01a17d2e-395f-7437-a6f0-50e52214fff1
 monaci_illusionista 01a17d2e-404f-7795-970f-4cdc335d6c07
 monaci_signore 01a17d2e-4707-71c6-8206-290a9acfb192
+cavalieri_citta 01a17d3e-8ecf-74ac-a0aa-78485f0b8227
+draghi_citta 01a17d3e-97e4-74d3-bb94-321ee6f0c837
+alati_citta 01a17d3e-9fa5-72e3-8dc1-652ce03a1c04
+monaci_citta 01a17d3e-a86c-738f-bae2-a6d27cb6b140
+amazzoni_citta 01a17d3e-b105-75e2-a818-1f650982717d
+aracnidi_citta 01a17d3e-b9f2-7123-bd03-1eff4890012b

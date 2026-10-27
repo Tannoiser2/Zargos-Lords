@@ -277,18 +277,23 @@ func pulisci_evidenziazioni(tranne: Array = []) -> void:
 
 # --- Pedine ---------------------------------------------------------------------
 
+## Due pezzi nello stesso esagono (pila di Zargo's Lords 2 o fante di scorta)
+## si dispongono affiancati e rimpiccioliti dentro l'esagono, così è chiaro che
+## occupano lo stesso esagono e non sconfinano nei vicini.
+const SCALA_PILA := 0.6
+func _pila(g: ZPartita, u: ZPedina) -> Array:
+	if u.scomparso:
+		return [0, 1]
+	var pila := g.pedine_in(u.hex).filter(func(w): return w.viva and w.schierata and w.citta < 0 and not w.scomparso)
+	pila.sort_custom(func(a, b): return (1 if a.scorta >= 0 else 0) * 100000 + a.id < (1 if b.scorta >= 0 else 0) * 100000 + b.id)
+	return [maxi(0, pila.find(u)), pila.size()]
+
 func _posizione_pedina(g: ZPartita, u: ZPedina) -> Vector3:
 	var p := mondo(u.hex)
-	if u.scorta >= 0:
-		p.y += ZSegnalino.SPESSORE   # il fante di scorta sta sopra, un po' spostato
-		p += Vector3(0.028, 0, 0.028)
-	elif u.scortato_da < 0 and not u.scomparso:
-		# Zargo's Lords 2: due pezzi nello stesso esagono, impilati e sfalsati.
-		var pila := g.pedine_in(u.hex).filter(func(w): return w.scorta < 0 and w.scortato_da < 0 and not w.scomparso)
-		var i := pila.find(u)
-		if i > 0:
-			p.y += ZSegnalino.SPESSORE * i
-			p += Vector3(0.035, 0, 0.035) * i
+	var pl := _pila(g, u)
+	if pl[1] >= 2:
+		var lato := -1.0 if pl[0] == 0 else 1.0
+		p += Vector3(lato * ZSegnalino.RAGGIO * 0.56, 0, 0)
 	if u.scomparso and not g.pedine_in(u.hex).is_empty():
 		# Segnalino di sparizione sotto un pezzo arrivato dopo: lo si sposta di lato.
 		p += Vector3(-0.07, -0.002, -0.05)
@@ -322,11 +327,11 @@ func sincronizza(g: ZPartita, durata := 0.25) -> void:
 		elif u.ridotta:
 			# Pezzo ridotto: girato a faccia in giù, come sul tavolo.
 			s.faccia("retro")
-			s.scale = Vector3.ONE
+			s.scale = Vector3.ONE * (SCALA_PILA if _pila(g, u)[1] >= 2 else 1.0)
 			s.testo("")
 		else:
 			s.faccia(u.tipo)
-			s.scale = Vector3.ONE
+			s.scale = Vector3.ONE * (SCALA_PILA if _pila(g, u)[1] >= 2 else 1.0)
 			s.testo(str(u.paralisi) if u.paralisi > 0 else "", Color(0.95, 0.6, 1.0))
 		if u.spada >= g.turno_globale:
 			s.alone(Color(1.0, 0.95, 0.6))
