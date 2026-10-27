@@ -831,7 +831,61 @@ func _process(delta: float) -> void:
 	_pitch = lerpf(_pitch, _pitch_obiettivo, k)
 	_aggiorna_camera()
 
+# --- Tocco (iPad, telefoni) ---------------------------------------------------------
+# Un dito: sposta il tavolo e seleziona (tramite l'emulazione del mouse).
+# Due dita: pizzico = zoom, rotazione = gira la vista, trascinare su/giù = inclinazione.
+var _tocchi := {}            # indice -> posizione
+var _due_dita := false
+
+func _gesto_due_dita(prima: Dictionary, dopo: Dictionary) -> void:
+	var k := prima.keys()
+	if k.size() < 2 or not dopo.has(k[0]) or not dopo.has(k[1]):
+		return
+	var a0: Vector2 = prima[k[0]]
+	var b0: Vector2 = prima[k[1]]
+	var a1: Vector2 = dopo[k[0]]
+	var b1: Vector2 = dopo[k[1]]
+	var d0 := a0.distance_to(b0)
+	var d1 := a1.distance_to(b1)
+	if d0 > 10.0 and d1 > 10.0:
+		_distanza_obiettivo = clampf(_distanza_obiettivo * d0 / d1, 1.6, 16.0)
+	var ang0 := (b0 - a0).angle()
+	var ang1 := (b1 - a1).angle()
+	_yaw_obiettivo -= wrapf(ang1 - ang0, -PI, PI)
+	var m0 := (a0 + b0) * 0.5
+	var m1 := (a1 + b1) * 0.5
+	_pitch_obiettivo = clampf(_pitch_obiettivo - (m1.y - m0.y) * 0.006, deg_to_rad(-88), deg_to_rad(-25))
+
+func _input(ev: InputEvent) -> void:
+	if ev is InputEventScreenTouch:
+		var t := ev as InputEventScreenTouch
+		if t.pressed:
+			_tocchi[t.index] = t.position
+		else:
+			_tocchi.erase(t.index)
+		if _tocchi.size() >= 2:
+			_due_dita = true
+			# Il secondo dito annulla il trascinamento e il clic del primo.
+			_trascina_sx = false
+			_spostato = true
+		elif _tocchi.is_empty():
+			_due_dita = false
+	elif ev is InputEventScreenDrag:
+		var d := ev as InputEventScreenDrag
+		if _tocchi.size() >= 2 and _tocchi.has(d.index):
+			var prima := _tocchi.duplicate()
+			_tocchi[d.index] = d.position
+			_gesto_due_dita(prima, _tocchi)
+			get_viewport().set_input_as_handled()
+		elif _tocchi.has(d.index):
+			_tocchi[d.index] = d.position
+
 func _unhandled_input(ev: InputEvent) -> void:
+	if _due_dita and (ev is InputEventMouseButton or ev is InputEventMouseMotion):
+		# Durante un gesto a due dita il mouse emulato non sposta né seleziona.
+		if ev is InputEventMouseButton and not ev.pressed:
+			_trascina_sx = false
+		return
 	if ev is InputEventMouseButton:
 		var b := ev as InputEventMouseButton
 		match b.button_index:

@@ -96,6 +96,7 @@ Nel gioco base ogni esagono ospita un solo pezzo (salvo il fante di scorta). Due
 - **Tasto sinistro**: seleziona; trascinando sposta il tavolo.
 - **Tasto destro**: trascinando ruota la vista; un clic annulla la selezione.
 - **Rotella**: zoom.
+- **Su iPad e telefoni**: un dito sposta il tavolo e seleziona; due dita pizzicano per lo zoom, ruotano per girare la vista e trascinate su o giù cambiano l'inclinazione.
 - **G**: reticolo degli esagoni.
 - **Invio**: fase successiva.
 - **Esc**: annulla.
