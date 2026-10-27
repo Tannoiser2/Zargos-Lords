@@ -32,6 +32,7 @@ var _ultimo_turno_visto := -1
 func _ready() -> void:
 	impostazioni.load(FILE_IMPOSTAZIONI)
 	ZTema.grafica = impostazioni.get_value("gioco", "grafica", "nuova")
+	ZTavolo.rilievi = impostazioni.get_value("gioco", "rilievi", "si") == "si"
 	tavolo = ZTavolo.new()
 	add_child(tavolo)
 	tavolo.esagono_cliccato.connect(_clic)
@@ -142,6 +143,12 @@ func _cambia_opzione(k: String) -> void:
 	match k:
 		"grafica":
 			_imposta("grafica", {"originale": "nuova", "nuova": "3d", "3d": "originale"}[ZTema.grafica])
+		"rilievi":
+			ZTavolo.rilievi = not ZTavolo.rilievi
+			impostazioni.set_value("gioco", "rilievi", "si" if ZTavolo.rilievi else "no")
+			impostazioni.save(FILE_IMPOSTAZIONI)
+			if partita:
+				tavolo.sincronizza(partita, 0.2)
 		"risoluzione":
 			_imposta("risoluzione", "riquadro" if impostazioni.get_value("gioco", "risoluzione", "ruota") == "ruota" else "ruota")
 		"mappa":

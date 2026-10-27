@@ -166,13 +166,11 @@ func _costruisci_tavolo() -> void:
 	add_child(faccia)
 
 func _costruisci_griglia() -> void:
-	var im := ImmediateMesh.new()
-	var m := StandardMaterial3D.new()
-	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	m.albedo_color = Color(1, 0.95, 0.8, 0.55)
-	m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	im.surface_begin(Mesh.PRIMITIVE_LINES, m)
+	# Bordi degli esagoni come nastri sottili neri (le linee GL hanno sempre 1 pixel).
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
 	var r := mappa.raggio_px / SCALA
+	var mezzo := r * 0.035
 	for riga in mappa.righe:
 		for col in mappa.colonne:
 			var h := Vector2i(col, riga)
@@ -182,11 +180,20 @@ func _costruisci_griglia() -> void:
 			for i in 6:
 				var a := deg_to_rad(60.0 * i - 90.0)
 				var b := deg_to_rad(60.0 * (i + 1) - 90.0)
-				im.surface_add_vertex(c + Vector3(cos(a), 0, sin(a)) * r)
-				im.surface_add_vertex(c + Vector3(cos(b), 0, sin(b)) * r)
-	im.surface_end()
+				var pa := c + Vector3(cos(a), 0, sin(a)) * r
+				var pb := c + Vector3(cos(b), 0, sin(b)) * r
+				var lato := (pb - pa).cross(Vector3.UP).normalized() * mezzo
+				for v in [pa - lato, pb - lato, pb + lato, pa - lato, pb + lato, pa + lato]:
+					st.add_vertex(v)
+	var m := StandardMaterial3D.new()
+	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	m.albedo_color = Color(0.05, 0.04, 0.03, 0.8)
+	m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	m.cull_mode = BaseMaterial3D.CULL_DISABLED
 	_griglia = MeshInstance3D.new()
-	_griglia.mesh = im
+	_griglia.mesh = st.commit()
+	_griglia.material_override = m
+	_griglia.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	_griglia.visible = false
 	add_child(_griglia)
 
@@ -441,8 +448,11 @@ func _tipo_rilievo(t: int) -> String:
 		ZMappa.T.GORGO: return "gorgo"
 	return ""
 
+## Rilievi 3D accesi o spenti (pulsante nella barra in alto).
+static var rilievi := true
+
 func altezza_terreno(g: ZPartita, h: Vector2i) -> float:
-	if ZTema.grafica != "3d" or g == null:
+	if not rilievi or g == null:
 		return 0.0
 	if not g.citta_in(h).is_empty():
 		return 0.0
@@ -489,7 +499,7 @@ func _multi(nome: String, trasformazioni: Array) -> void:
 ## Gli esagoni con una città restano piatti.
 func aggiorna_terreno_3d(g: ZPartita) -> void:
 	var chiave := ""
-	if ZTema.grafica == "3d" and g != null:
+	if rilievi and g != null:
 		var parti: PackedStringArray = []
 		for ci in g.citta:
 			parti.append("%d,%d" % [ci.h[0], ci.h[1]])

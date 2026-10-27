@@ -4,7 +4,7 @@ extends RefCounted
 
 ## Il calendario dei 25 mesi, come sulla ruota: i mesi trascorsi sono barrati.
 class Calendario extends Control:
-	const PASSO := 25.0
+	const PASSO := 23.5
 	var mese := 1
 	func _init() -> void:
 		custom_minimum_size = Vector2(25 * PASSO + 8, 32)
@@ -19,10 +19,10 @@ class Calendario extends Control:
 			var n := i + 1
 			var attuale := n == mese
 			if attuale:
-				draw_circle(c, 12.0, ZTema.AVORIO)
-				draw_arc(c, 12.0, 0, TAU, 28, ZTema.OCRA, 2.2, true)
+				draw_circle(c, 11.5, ZTema.AVORIO)
+				draw_arc(c, 11.5, 0, TAU, 28, ZTema.OCRA, 2.2, true)
 			else:
-				draw_arc(c, 11.0, 0, TAU, 28, Color(ZTema.AVORIO, 0.75 if n > mese else 0.35), 1.5, true)
+				draw_arc(c, 10.5, 0, TAU, 28, Color(ZTema.AVORIO, 0.75 if n > mese else 0.35), 1.5, true)
 			var s := str(n)
 			var dim := 12
 			var w := font.get_string_size(s, HORIZONTAL_ALIGNMENT_CENTER, -1, dim).x

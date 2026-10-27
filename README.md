@@ -74,6 +74,9 @@ Nel gioco base ogni esagono ospita un solo pezzo (salvo il fante di scorta). Due
 
 ## Opzioni (barra in alto durante la partita)
 
+- **Rilievi**: montagne, boschi, gorghi e ponti di nuvole in 3D, attivabili con qualunque grafica delle pedine.
+- **G** o l'icona esagonale mostrano il reticolo, a linee nere.
+
 - **Scontri e tiri**: *ruota originale* oppure *riquadro*. Con la ruota, il disco fotografato dalla scatola gira sotto il cartoncino del calendario, si ferma sul dado ed evidenzia la fascia del risultato: la ruota dei combattimenti per gli scontri e, sull'altra metà, per le visioni; la ruota dei tiri per frecce e fiamme. Vale per tutti gli scontri e i tiri, anche fra IA. Arciere a cavallo e dardi degli Aracnidi, che hanno tabelle di Zargo's Lords 2 non stampate sulle ruote, usano il riquadro. Le texture sono generate da `tools/genera_ruota.py`.
 - **Mappa**: *nuova* (modulo Tabletop Simulator) oppure *originale* (tabellone 1979). La mappa originale è riallineata esagono per esagono sul reticolo della nuova (`tools/mappa_originale/`); ora è ricostruita dalle 18 scansioni A4 del tabellone (`tools/mappa_scansionata`) e riallineata a mano sul reticolo, a 4096 × 2749 pixel come la mappa nuova.
 
@@ -128,6 +131,7 @@ Alcuni punti del regolamento sono ambigui. Le scelte fatte qui sono queste:
 - Le guarnigioni sono coperte: non esercitano zona d'influenza e i Maghi in città non danno il +2 ai pezzi fuori.
 - Fantarcieri e Lanciafiamme in attacco possono solo tirare; Maghi, Illusionisti e Signori Draghi scelgono fra lancio e corpo a corpo (chi lancia non combatte più in quella mossa).
 - Il segnalino di sparizione dei Monaci non blocca l'esagono.
+- Le montagne seguono la mappa originale: 22 esagoni che la mappa nuova disegna come montagna ma il tabellone del 1979 no sono pianura.
 - Frecce, fiamme e visioni non passano sopra il mare, i ponti di nuvole, le montagne, i gorghi e le città (le frecce neanche sopra i boschi); in Zargo's Lords 2 lo dice il regolamento, nel gioco base è un'interpretazione.
 - Lo scambio degli ostaggi nelle alleanze non è ancora implementato.
 - ZL2: la Voragine di fiamme dà mezza città (o metà dei punti in guerra lampo); il Mega drago combatte solo nella mossa in cui è evocato; le Pantere tornano Donne o fanti all'inizio della mossa successiva delle Amazzoni.

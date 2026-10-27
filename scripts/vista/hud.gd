@@ -76,7 +76,7 @@ func _barra_alta() -> void:
 	barra.add_theme_stylebox_override("panel", ZTema.riquadro(ZTema.CUOIO, ZTema.CUOIO_SCURO, 0, 0, 14))
 	radice.add_child(barra)
 	var h := HBoxContainer.new()
-	h.add_theme_constant_override("separation", 22)
+	h.add_theme_constant_override("separation", 14)
 	barra.add_child(h)
 	var cal_box := VBoxContainer.new()
 	cal_box.add_theme_constant_override("separation", 0)
@@ -94,20 +94,22 @@ func _barra_alta() -> void:
 	var tb := VBoxContainer.new()
 	tb.add_theme_constant_override("separation", -2)
 	tb.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	lbl_turno = ZTema.etichetta("", 22, ZTema.AVORIO, ZTema.titolo)
+	lbl_turno = ZTema.etichetta("", 20, ZTema.AVORIO, ZTema.titolo)
+	lbl_turno.clip_text = true
+	lbl_turno.custom_minimum_size = Vector2(150, 0)
+	turno_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	tb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	lbl_fase = ZTema.etichetta("", 12, Color(ZTema.AVORIO, 0.75), ZTema.testo_forte)
+	lbl_fase.clip_text = true
 	tb.add_child(lbl_turno)
 	tb.add_child(lbl_fase)
 	turno_box.add_child(tb)
 	h.add_child(turno_box)
-	var spazio := Control.new()
-	spazio.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	h.add_child(spazio)
 	# Scelte grafiche, sempre a portata di mano.
 	var opz := HBoxContainer.new()
-	opz.add_theme_constant_override("separation", 4)
-	for k in ["grafica", "risoluzione", "mappa"]:
-		var b := ZTema.pulsante("", func(): opzione_premuta.emit(k), 12)
+	opz.add_theme_constant_override("separation", 3)
+	for k in ["grafica", "rilievi", "risoluzione", "mappa"]:
+		var b := ZTema.pulsante("", func(): opzione_premuta.emit(k), 11)
 		b.custom_minimum_size = Vector2(0, 34)
 		b.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		pulsanti_opzioni[k] = b
@@ -129,6 +131,9 @@ func aggiorna_opzioni(grafica: String, risoluzione: String, mappa: String) -> vo
 	var b: Button = pulsanti_opzioni.grafica
 	b.text = "Pedine: " + {"originale": "1979", "nuova": "nuove", "3d": "3D"}.get(grafica, grafica)
 	b.tooltip_text = "Cambia la grafica delle pedine: originali 1979, nuove, miniature 3D"
+	b = pulsanti_opzioni.rilievi
+	b.text = "Rilievi: " + ("sì" if ZTavolo.rilievi else "no")
+	b.tooltip_text = "Montagne, boschi, gorghi e ponti di nuvole in 3D sul tavolo"
 	b = pulsanti_opzioni.risoluzione
 	b.text = "Scontri: " + ("ruota" if risoluzione == "ruota" else "riquadro")
 	b.tooltip_text = "Risolvi scontri e tiri con la ruota originale o con il riquadro"
