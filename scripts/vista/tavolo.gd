@@ -412,51 +412,218 @@ func seleziona_pedine(ids: Array, colore := ZTema.OCRA) -> void:
 # --- Effetti ----------------------------------------------------------------------
 
 ## Proiettile (freccia, vampa o visione) che vola da un esagono all'altro.
-func lancia(da: Vector2i, a: Vector2i, tipo: String) -> void:
-	var p := MeshInstance3D.new()
+## Animazione dei lanci. Il tiratore si gira verso il bersaglio e si carica,
+## poi partono frecce (a raffica, in arco), fiamme (sciame di braci) o visioni
+## (anelli spettrali); all'arrivo il bersaglio sussulta. Dura circa 1,2 s.
+func lancia(da: Vector2i, a: Vector2i, tipo: String, id_tiratore := -1, id_bersaglio := -1) -> void:
+	var o := mondo(da)
+	var f := mondo(a)
+	var st: ZSegnalino = segnalini.get(id_tiratore)
+	var sb: ZSegnalino = segnalini.get(id_bersaglio)
+	if st:
+		o = st.position
+	if sb:
+		f = sb.position
+	var altezza_partenza := 0.2 if ZTema.grafica == "3d" else 0.08
+	if st:
+		await st.carica_tiro(f)
+	match tipo:
+		"frecce", "cavallo", "dardi":
+			var colore := Color("8fbf5a") if tipo == "dardi" else Color("e9dcc0")
+			for k in 3:
+				var sp := Vector3(randf_range(-0.03, 0.03), 0, randf_range(-0.03, 0.03))
+				_freccia_volante(o + Vector3(0, altezza_partenza, 0), f + sp + Vector3(0, 0.05, 0), colore, 0.5)
+				await get_tree().create_timer(0.09).timeout
+			await get_tree().create_timer(0.45).timeout
+		"fiamme":
+			for k in 26:
+				_brace(o + Vector3(0, altezza_partenza * 0.9, 0), f + Vector3(0, 0.05, 0))
+				await get_tree().create_timer(0.025).timeout
+			await get_tree().create_timer(0.35).timeout
+			_esplosione(f, Color(1.0, 0.5, 0.1), Color(0.9, 0.15, 0.05))
+		_:
+			for k in 3:
+				_anello_visione(o + Vector3(0, altezza_partenza, 0), f + Vector3(0, 0.1, 0))
+				await get_tree().create_timer(0.12).timeout
+			await get_tree().create_timer(0.45).timeout
+			_esplosione(f, Color(0.8, 0.6, 1.0), Color(0.35, 0.15, 0.7))
+	if sb:
+		sb.sussulta()
+
+func _materiale_luce(colore: Color) -> StandardMaterial3D:
 	var m := StandardMaterial3D.new()
 	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	match tipo:
-		"frecce":
-			var c := CylinderMesh.new()
-			c.top_radius = 0.004
-			c.bottom_radius = 0.004
-			c.height = 0.16
-			p.mesh = c
-			m.albedo_color = Color("f3e6c4")
-		"fiamme":
-			var s := SphereMesh.new()
-			s.radius = 0.05
-			s.height = 0.1
-			p.mesh = s
-			m.albedo_color = Color(1.0, 0.45, 0.1, 0.9)
-		_:
-			var s := SphereMesh.new()
-			s.radius = 0.045
-			s.height = 0.09
-			p.mesh = s
-			m.albedo_color = Color(0.75, 0.55, 1.0, 0.8)
-	p.material_override = m
-	effetti.add_child(p)
-	var o := mondo(da) + Vector3(0, 0.15, 0)
-	var f := mondo(a) + Vector3(0, 0.08, 0)
-	p.position = o
-	if tipo == "frecce":
-		p.look_at_from_position(o, f, Vector3.UP)
-		p.rotate_object_local(Vector3.RIGHT, PI / 2)
-	var tw := create_tween()
-	var altezza := o.distance_to(f) * 0.25
-	tw.tween_method(func(t: float):
+	m.albedo_color = colore
+	return m
+
+func _freccia_volante(o: Vector3, f: Vector3, colore: Color, durata: float) -> void:
+	var freccia := Node3D.new()
+	var asta := MeshInstance3D.new()
+	var c := CylinderMesh.new()
+	c.top_radius = 0.0035
+	c.bottom_radius = 0.0035
+	c.height = 0.11
+	c.radial_segments = 6
+	asta.mesh = c
+	asta.material_override = _materiale_luce(colore)
+	asta.rotation.x = PI / 2
+	freccia.add_child(asta)
+	var punta := MeshInstance3D.new()
+	var cp := CylinderMesh.new()
+	cp.top_radius = 0.0
+	cp.bottom_radius = 0.009
+	cp.height = 0.025
+	cp.radial_segments = 6
+	punta.mesh = cp
+	punta.material_override = _materiale_luce(Color(0.55, 0.6, 0.65))
+	punta.rotation.x = -PI / 2
+	punta.position.z = -0.065
+	freccia.add_child(punta)
+	var coda := MeshInstance3D.new()
+	var cc := CylinderMesh.new()
+	cc.top_radius = 0.012
+	cc.bottom_radius = 0.0
+	cc.height = 0.025
+	cc.radial_segments = 3
+	coda.mesh = cc
+	coda.material_override = _materiale_luce(Color(0.75, 0.2, 0.15))
+	coda.rotation.x = -PI / 2
+	coda.position.z = 0.05
+	freccia.add_child(coda)
+	freccia.scale = Vector3.ONE * 1.7
+	effetti.add_child(freccia)
+	var alt := o.distance_to(f) * 0.3
+	var pos := func(t: float) -> Vector3:
 		var q := o.lerp(f, t)
-		q.y += sin(t * PI) * altezza
-		p.position = q
-		if tipo != "frecce":
-			p.scale = Vector3.ONE * (1.0 + sin(t * PI * 6.0) * 0.2)
-	, 0.0, 1.0, 0.45)
-	tw.tween_property(p, "scale", Vector3.ONE * 2.2, 0.15)
-	tw.parallel().tween_property(m, "albedo_color:a", 0.0, 0.15)
-	tw.tween_callback(p.queue_free)
+		q.y += sin(t * PI) * alt
+		return q
+	freccia.position = o
+	var tw := create_tween()
+	tw.tween_method(func(t: float):
+		var q: Vector3 = pos.call(t)
+		var avanti: Vector3 = pos.call(minf(1.0, t + 0.02))
+		freccia.position = q
+		if avanti.distance_to(q) > 0.0001:
+			freccia.look_at(avanti, Vector3.UP)
+			freccia.scale = Vector3.ONE * 1.7
+	, 0.0, 1.0, durata)
+	tw.tween_interval(0.25)
+	tw.tween_callback(freccia.queue_free)
+
+func _brace(o: Vector3, f: Vector3) -> void:
+	var b := MeshInstance3D.new()
+	var sm := SphereMesh.new()
+	sm.radius = 0.02
+	sm.height = 0.04
+	sm.radial_segments = 8
+	sm.rings = 4
+	b.mesh = sm
+	var m := _materiale_luce(Color(1.0, 0.85, 0.3, 0.95))
+	b.material_override = m
+	effetti.add_child(b)
+	b.position = o
+	var jitter := Vector3(randf_range(-0.04, 0.04), randf_range(-0.02, 0.05), randf_range(-0.04, 0.04))
+	var alt := o.distance_to(f) * 0.12
+	var tw := create_tween()
+	tw.tween_method(func(t: float):
+		var q := o.lerp(f + jitter, t)
+		q.y += sin(t * PI) * alt
+		b.position = q
+		b.scale = Vector3.ONE * (0.6 + t * 1.6)
+		m.albedo_color = Color(1.0, 0.85, 0.3).lerp(Color(0.9, 0.2, 0.05), t)
+		m.albedo_color.a = 0.95 - t * 0.35
+	, 0.0, 1.0, 0.4)
+	tw.tween_property(m, "albedo_color:a", 0.0, 0.15)
+	tw.tween_callback(b.queue_free)
+
+func _anello_visione(o: Vector3, f: Vector3) -> void:
+	var a := MeshInstance3D.new()
+	var t := TorusMesh.new()
+	t.inner_radius = 0.035
+	t.outer_radius = 0.05
+	a.mesh = t
+	var m := _materiale_luce(Color(0.78, 0.6, 1.0, 0.85))
+	m.cull_mode = BaseMaterial3D.CULL_DISABLED
+	a.material_override = m
+	effetti.add_child(a)
+	a.position = o
+	var tw := create_tween()
+	tw.tween_method(func(x: float):
+		var q := o.lerp(f, x)
+		q.y += sin(x * PI) * 0.08 + sin(x * PI * 4.0) * 0.015
+		a.position = q
+		a.rotation = Vector3(x * PI * 3.0, x * PI * 2.0, 0)
+		a.scale = Vector3.ONE * (0.7 + sin(x * PI) * 0.6)
+	, 0.0, 1.0, 0.55)
+	tw.tween_property(a, "scale", Vector3.ONE * 2.5, 0.2)
+	tw.parallel().tween_property(m, "albedo_color:a", 0.0, 0.2)
+	tw.tween_callback(a.queue_free)
+
+## Lampo di particelle (fiamme, visioni, fumo).
+func _esplosione(h: Vector3, c1: Color, c2: Color, n := 24, su := 0.25, durata := 0.6, grandezza := 1.0) -> void:
+	var p := CPUParticles3D.new()
+	var sm := SphereMesh.new()
+	sm.radius = 0.018
+	sm.height = 0.036
+	sm.radial_segments = 6
+	sm.rings = 3
+	p.mesh = sm
+	var m := StandardMaterial3D.new()
+	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	m.vertex_color_use_as_albedo = true
+	p.material_override = m
+	p.amount = n
+	p.one_shot = true
+	p.explosiveness = 0.9
+	p.lifetime = durata
+	p.direction = Vector3.UP
+	p.spread = 70.0
+	p.initial_velocity_min = su * 0.5
+	p.initial_velocity_max = su
+	p.gravity = Vector3(0, 0.1, 0)
+	p.scale_amount_min = 1.0 * grandezza
+	p.scale_amount_max = 2.5 * grandezza
+	var g := Gradient.new()
+	g.set_color(0, c1)
+	g.set_color(1, Color(c2, 0.0))
+	p.color_ramp = g
+	var curva := Curve.new()
+	curva.add_point(Vector2(0, 0.6))
+	curva.add_point(Vector2(1, 1.6))
+	p.scale_amount_curve = curva
+	p.position = h + Vector3(0, 0.05, 0)
+	effetti.add_child(p)
+	p.emitting = true
+	get_tree().create_timer(durata + 0.3).timeout.connect(p.queue_free)
+
+## Il Signore Monaco svanisce in una nuvola di fumo dorato.
+func svanisci(id: int) -> void:
+	var s: ZSegnalino = segnalini.get(id)
+	if s == null:
+		return
+	_esplosione(s.position, Color(1.0, 0.97, 0.85, 1.0), Color(0.95, 0.75, 0.35), 50, 0.2, 1.3, 2.6)
+	_esplosione(s.position, Color(1.0, 0.8, 0.3, 1.0), Color(1.0, 0.5, 0.1), 16, 0.35, 0.6, 1.2)
+	var tw := s.create_tween()
+	tw.tween_property(s, "position:y", s.position.y + 0.12, 0.6).set_trans(Tween.TRANS_SINE)
+	tw.parallel().tween_property(s, "scale", Vector3.ONE * 0.05, 0.6).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_IN)
+	await tw.finished
+
+## Ricomparsa: fumo dorato e il pezzo che cresce dal nulla.
+func ricompari(id: int, h: Vector2i) -> void:
+	var p := mondo(h)
+	_esplosione(p, Color(1.0, 0.97, 0.85, 1.0), Color(0.95, 0.75, 0.35), 50, 0.2, 1.3, 2.6)
+	var s: ZSegnalino = segnalini.get(id)
+	if s == null:
+		return
+	s.position = p
+	s.faccia(s.tipo)
+	s.scale = Vector3.ONE * 0.05
+	var tw := s.create_tween()
+	tw.tween_interval(0.25)
+	tw.tween_property(s, "scale", Vector3.ONE, 0.5).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	await tw.finished
 
 func lampo(h: Vector2i, colore := Color(1, 0.9, 0.5)) -> void:
 	var anello := _anello_esagono(colore, 0.02)

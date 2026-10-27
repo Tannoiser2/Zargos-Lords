@@ -247,7 +247,12 @@ func _presenta_coda() -> void:
 				await _presenta_scontro(e)
 			"tiro":
 				_effetto(e)
-				await get_tree().create_timer(0.5).timeout
+				await get_tree().create_timer(1.3).timeout
+			"scompare":
+				await tavolo.svanisci(int(e.u))
+				tavolo.sincronizza(partita, 0.0)
+			"ricompare":
+				await tavolo.ricompari(int(e.u), Vector2i(int(e.a[0]), int(e.a[1])))
 			"muovi", "ritira":
 				tavolo.sposta(int(e.u), Vector2i(int(e.a[0]), int(e.a[1])), 0.3 if e.t == "muovi" else 0.4)
 				if e.t == "ritira":
@@ -356,7 +361,7 @@ func _effetto(e: Dictionary) -> void:
 		"tiro":
 			var u := partita.pedine[int(e.u)]
 			var b := partita.pedine[int(e.b)]
-			tavolo.lancia(u.hex, b.hex, e.tipo)
+			tavolo.lancia(u.hex, b.hex, e.tipo, u.id, b.id)
 			if e.tipo == "visione":
 				hud.mostra_dado(int(e.dado), "VISIONE: FUGA DI %d" % e.fuga if e.fuga > 0 else "VISIONE SENZA EFFETTO", "%s su %s a %d esagoni." % [u.nome(), b.nome(), e.distanza])
 			else:
@@ -851,7 +856,7 @@ func _aggiorna_popoli() -> void:
 func _scheda_pedina(u: ZPedina) -> Control:
 	var h := HBoxContainer.new()
 	var img := TextureRect.new()
-	img.texture = load(ZSegnalino.percorso_faccia(u.popolo, u.tipo))
+	img.texture = ZTema.texture_pedina(u.popolo, u.tipo)
 	img.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	img.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	img.custom_minimum_size = Vector2(84, 84)

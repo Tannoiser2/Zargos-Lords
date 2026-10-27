@@ -307,6 +307,15 @@ func _init() -> void:
 	g.esegui({"a": "ricompari", "u": mon.id, "h": [d0.x, d0.y]})
 	controlla(not g.esegui({"a": "scompari", "u": mon.id}).ok, "chi ricompare non può sparire di nuovo nella stessa mossa")
 
+	print("Pile nel gioco base")
+	g = partita_vuota()
+	p = pianura_aperta(g)
+	var b1 := metti(g, "Cavalieri", "fante", p)
+	var b2 := metti(g, "Cavalieri", "fante", g.mappa.linea(p, 0, 1)[0])
+	controlla(not g.esegui({"a": "muovi", "u": b2.id, "h": [p.x, p.y]}).ok, "senza espansione due fanti non stanno nello stesso esagono")
+	var b3 := metti(g, "Cavalieri", "mago", g.mappa.linea(p, 3, 1)[0])
+	controlla(not g.esegui({"a": "muovi", "u": b3.id, "h": [p.x, p.y]}).ok or b1.scorta >= 0, "senza espansione solo un fante di scorta può affiancare un pezzo")
+
 	print("Zargo's Lords 2")
 	g = partita_zl2({"magia": true})
 	controlla(g.zl2() and g.citta.filter(func(c): return c.p == "Amazzoni").size() == 6, "con i nuovi popoli valgono le regole di ZL2, sei città a testa")

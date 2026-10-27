@@ -162,6 +162,9 @@ static func _dati_modello(percorso: String) -> Dictionary:
 			var s := ALTEZZA_MODELLO / box.size.y
 			# Le figure larghe (ragno, serpente, cammello) non escono dall'esagono.
 			s = minf(s, RAGGIO * 2.6 / maxf(box.size.x, box.size.z))
+			if percorso.ends_with("citta.glb"):
+				# La città resta dentro la sua base esagonale (raggio inscritto).
+				s = minf(ALTEZZA_MODELLO * 1.1 / box.size.y, RAGGIO * 1.08 * 0.866 * 2.0 / maxf(box.size.x, box.size.z))
 			d.scala = s
 			d.centro = Vector3(box.position.x + box.size.x * 0.5, box.position.y, box.position.z + box.size.z * 0.5)
 			# Centra la miniatura sui punti d'appoggio (piedi, zampe), non sulle armi sporgenti.
@@ -172,7 +175,7 @@ static func _dati_modello(percorso: String) -> Dictionary:
 				if v.y <= soglia:
 					somma += v
 					conta += 1
-			if conta > 20:
+			if conta > 20 and not percorso.ends_with("citta.glb"):
 				d.centro = Vector3(somma.x / conta, box.position.y, somma.z / conta)
 	_modelli[percorso] = d
 	return d
@@ -200,7 +203,7 @@ func figura(t: String) -> void:
 	var sc: float = d.scala * (1.35 if t == "megadrago" else 1.0)
 	if t == "citta":
 		# Le città sono più larghe e restano dentro il loro esagono.
-		sc = d.scala * 0.95
+		sc = d.scala
 	n.scale = Vector3.ONE * sc
 	n.position = -d.centro * sc
 	_figura.add_child(n)
@@ -311,3 +314,25 @@ func elimina_animato() -> void:
 	_tween.tween_property(self, "position:y", position.y + 0.25, 0.2)
 	_tween.parallel().tween_property(self, "scale", Vector3(0.2, 0.2, 0.2), 0.35).set_delay(0.1)
 	_tween.tween_callback(queue_free)
+
+## Il tiratore si volta verso il bersaglio e si "carica" all'indietro.
+func carica_tiro(bersaglio: Vector3) -> void:
+	var dir := bersaglio - position
+	dir.y = 0
+	var tw := create_tween()
+	if _figura and dir.length() > 0.001:
+		var ang := atan2(dir.x, dir.z)
+		tw.tween_property(_figura, "rotation:y", ang, 0.25).set_trans(Tween.TRANS_SINE)
+	var dietro := -dir.normalized() * 0.025 if dir.length() > 0.001 else Vector3.ZERO
+	tw.tween_property(corpo, "position", Vector3(dietro.x, _sollevato + 0.02, dietro.z), 0.15)
+	tw.tween_property(corpo, "position", Vector3(-dietro.x * 0.6, _sollevato, -dietro.z * 0.6), 0.08)
+	tw.tween_property(corpo, "position", Vector3(0, _sollevato, 0), 0.15)
+	await get_tree().create_timer(0.4).timeout
+
+## Sussulto del bersaglio colpito.
+func sussulta() -> void:
+	var tw := create_tween()
+	for k in 4:
+		var x := 0.012 * (1 if k % 2 == 0 else -1)
+		tw.tween_property(corpo, "position:x", x, 0.04)
+	tw.tween_property(corpo, "position:x", 0.0, 0.04)

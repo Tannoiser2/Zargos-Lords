@@ -144,7 +144,16 @@ static func percorso_pedina(popolo: String, tipo: String) -> String:
 			return nuovo
 	return orig
 
+## Immagine del pezzo per l'interfaccia: con le miniature 3D è il rendering
+## della miniatura, altrimenti la faccia della pedina.
 static func texture_pedina(popolo: String, tipo: String) -> Texture2D:
+	if grafica == "3d":
+		var mappa_tipi := {"pantera0": "pantera", "megadrago": "signore"}
+		var f := "res://assets/ui/miniature/%s/%s.png" % ["draghi" if tipo == "megadrago" else popolo.to_lower(), mappa_tipi.get(tipo, tipo)]
+		if ResourceLoader.exists(f):
+			return load(f)
+	if tipo == "megadrago":
+		return load("res://assets/units/magia/megadrago.png")
 	return load(percorso_pedina(popolo, tipo))
 
 ## Disegno del Signore per il menu, coerente con la grafica scelta.
