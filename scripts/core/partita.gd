@@ -370,11 +370,17 @@ func _linea_percorribile(g: ZPedina, da: Vector2i, dir: int, passi: int) -> bool
 		return false
 	var h := da
 	var speso := 0
+	var volante := g.vola()
 	for i in passi:
 		h = mappa.vicino_dir(h, dir)
-		if not mappa.terra(h):
+		if not mappa.terra(h) or _bloccato(h, g, volante):
 			return false
-		speso += 2 if mappa.terreno(h) == ZMappa.T.BOSCO and not g.vola() else 1
+		var t := mappa.terreno(h)
+		if not volante and t == ZMappa.T.MONTAGNA:
+			return false
+		if i < passi - 1 and (t == ZMappa.T.GORGO or _ferma_qui(h, g, volante, false)):
+			return false
+		speso += 2 if t == ZMappa.T.BOSCO and not volante else 1
 	return speso <= g.m()
 
 func _entra_in_citta(u: ZPedina, ci: Dictionary) -> void:
@@ -398,10 +404,11 @@ func _conquista(ci: Dictionary, conquistatore: ZPedina, eventi: Array) -> void:
 	ci.g.clear()
 	conquistatore.hex = hex_citta(ci)
 	if conquistatore.scorta >= 0:
-		# La coppia si scioglie: il fante resta fuori a presidiare.
+		# La coppia si scioglie ed entrano entrambi in città.
 		var s := pedine[conquistatore.scorta]
 		s.scortato_da = -1
 		conquistatore.scorta = -1
+		s.hex = hex_citta(ci)
 		_entra_in_citta(s, ci)
 	_entra_in_citta(conquistatore, ci)
 	_log("%s conquistano una città %s!" % [ZRegole.Gli(conquistatore.popolo), ZRegole.degli(vecchio)])
@@ -458,6 +465,9 @@ func _ritira(u: ZPedina, passi: int, minaccia: String, eventi: Array) -> void:
 		if punteggio > miglior_punteggio:
 			miglior_punteggio = punteggio
 			migliore = prova
+	# Sacrificare un pezzo spinto conviene solo se vale meno di chi arretra.
+	if not migliore.is_empty() and int(migliore.sacrificio) >= 0 and int(migliore.perdite) > u_guida.c():
+		migliore = {}
 	if migliore.is_empty():
 		_log("%s %s non ha via di fuga." % [u_guida.nome(), ZRegole.degli(u_guida.popolo)])
 		var gruppo := [u_guida]
@@ -468,10 +478,16 @@ func _ritira(u: ZPedina, passi: int, minaccia: String, eventi: Array) -> void:
 			w.scorta = -1
 			_elimina(w, minaccia, eventi)
 		return
+	if int(migliore.sacrificio) >= 0:
+		_elimina(pedine[int(migliore.sacrificio)], minaccia, eventi)
 	for spinta in migliore.spinte:
 		var w: ZPedina = pedine[spinta[0]]
 		var dest := Vector2i(spinta[1][0], spinta[1][1])
 		_sposta_gruppo(w, dest, eventi, "ritira")
+		if mappa.terreno(dest) == ZMappa.T.GORGO:
+			w.paralisi = 3
+			if w.scorta >= 0:
+				pedine[w.scorta].paralisi = 3
 	_sposta_gruppo(u_guida, migliore.fine, eventi, "ritira")
 	if migliore.gorgo:
 		u_guida.paralisi = 3
@@ -515,20 +531,23 @@ func _simula_ritirata(u: ZPedina, dir: int, passi: int) -> Dictionary:
 	var fine := percorso[-1]
 	var spinte := []
 	var perdite := 0
+	var sacrificio := -1
 	# Pezzi amici sull'esagono finale: vengono spinti avanti lungo la stessa linea.
 	var occupante := pedina_in(fine)
 	var cursore := fine
 	while occupante != null and occupante != u and occupante != pedine[u.scorta if u.scorta >= 0 else u.id]:
 		var avanti := mappa.vicino_dir(cursore, dir)
 		if _ostacolo_ritirata(avanti, occupante.popolo, []):
-			perdite += 1
+			# Si può scegliere di sacrificare il pezzo spinto invece di chi arretra.
+			perdite = occupante.c()
+			sacrificio = occupante.id
 			break
 		spinte.push_front([occupante.id, [avanti.x, avanti.y]])
 		cursore = avanti
+		if mappa.terreno(avanti) == ZMappa.T.GORGO:
+			break
 		occupante = pedina_in(avanti)
-	if perdite > 0:
-		return {}
-	return {"fine": fine, "spinte": spinte, "perdite": perdite, "gorgo": gorgo, "da": [u.hex.x, u.hex.y]}
+	return {"fine": fine, "spinte": spinte, "perdite": perdite, "sacrificio": sacrificio, "gorgo": gorgo, "da": [u.hex.x, u.hex.y]}
 
 # ---------------------------------------------------------------------------
 # Combattimento
@@ -609,15 +628,20 @@ func _risolvi(att: Array[ZPedina], dif: Array[ZPedina], eventi: Array, singolo :
 	var esito := ZRegole.esito_combattimento(diff, dado)
 	for u in att:
 		u.agito = true
-	for d in dif:
-		d.ingaggiata = true
 	eventi.append({
 		"t": "combattimento", "att": att.map(func(u): return u.id), "dif": dif.map(func(u): return u.id),
 		"fa": fa, "fd": fd, "diff": diff, "fascia": ZRegole.fascia(diff), "dado": dado, "esito": esito, "singolo": singolo,
 	})
 	_log("%s %s (%d) contro %s (%d): dado %d, differenza %d » %s" % [
 		"Attacco singolo:" if singolo else "Scontro:", _elenco(att), fa, _elenco(dif), fd, dado, diff, esito])
+	# La zona d'influenza del difensore cessa durante lo scontro (non conta per
+	# chi gli sta intorno) e riprende alla fine; se arretrano gli attaccanti,
+	# devono comunque evitarla.
+	for d in dif:
+		d.ingaggiata = not esito.begins_with("A")
 	_applica_esito(esito, att, dif, eventi)
+	for d in dif:
+		d.ingaggiata = false
 	return esito
 
 func _applica_esito(esito: String, att: Array[ZPedina], dif: Array[ZPedina], eventi: Array) -> void:
@@ -797,7 +821,6 @@ func _tiro(u: ZPedina, b: ZPedina, eventi: Array) -> void:
 	var v := valuta_tiro(u, b)
 	var dado := rng.randi_range(1, 6)
 	u.agito = true
-	b.ingaggiata = true
 	if v.tipo == "visione":
 		var fuga := ZRegole.fuga_visione(dado, v.distanza, b.m())
 		eventi.append({"t": "tiro", "tipo": "visione", "u": u.id, "b": b.id, "dado": dado, "distanza": v.distanza, "fuga": fuga})
@@ -845,9 +868,14 @@ func basi_attacco_singolo(u: ZPedina, b: ZPedina) -> Array[Vector2i]:
 	if serpente_in_corsa:
 		# Il serpente travolge in linea retta: prosegue solo lungo la stessa direzione.
 		var h := u.hex
-		for i in u.residuo:
+		var speso := 0
+		while true:
 			h = mappa.vicino_dir(h, u.carica_dir)
-			if not mappa.terra(h) or not pedine_in(h).is_empty():
+			var t := mappa.terreno(h)
+			if not mappa.terra(h) or not pedine_in(h).is_empty() or not citta_in(h).is_empty() or t in [ZMappa.T.MONTAGNA, ZMappa.T.GORGO]:
+				break
+			speso += 2 if t == ZMappa.T.BOSCO else 1
+			if speso > u.residuo:
 				break
 			if mappa.vicino_dir(h, u.carica_dir) == b.hex:
 				out.append(h)
@@ -856,8 +884,11 @@ func basi_attacco_singolo(u: ZPedina, b: ZPedina) -> Array[Vector2i]:
 	var rag := raggiungibili(u, true)
 	for v in mappa.vicino_geometrico_tutti(b.hex):
 		if rag.has(v) and pedine_in(v).is_empty() and citta_in(v).is_empty():
-			if u.tipo == "serpente" and mappa.direzione_retta(u.hex, v, 16) != mappa.direzione_retta(v, b.hex, 2) and v != u.hex:
-				continue
+			if u.tipo == "serpente" and v != u.hex:
+				# Il serpente carica in linea retta fino al nemico.
+				var dir := mappa.direzione_retta(u.hex, v, 16)
+				if dir < 0 or dir != mappa.direzione_retta(v, b.hex, 2) or not _linea_percorribile(u, u.hex, dir, mappa.distanza(u.hex, v)):
+					continue
 			out.append(v)
 	return out
 
@@ -866,7 +897,10 @@ func _attacco_singolo(u: ZPedina, b: ZPedina, base: Vector2i, eventi: Array) -> 
 	var costo := 0
 	if base != u.hex:
 		if u.tipo == "serpente" and u.singolo:
-			costo = mappa.distanza(u.hex, base)
+			var h := u.hex
+			while h != base:
+				h = mappa.vicino_dir(h, u.carica_dir)
+				costo += 2 if mappa.terreno(h) == ZMappa.T.BOSCO else 1
 		else:
 			costo = int(raggiungibili(u, true).get(base, 0))
 		var da := u.hex
@@ -888,10 +922,11 @@ func _attacco_singolo(u: ZPedina, b: ZPedina, base: Vector2i, eventi: Array) -> 
 		if u.tipo == "serpente" and u.residuo > 0:
 			# Il serpente avanza nell'esagono lasciato libero e può proseguire la carica.
 			var avanti := mappa.vicino_dir(u.hex, u.carica_dir)
-			if mappa.terra(avanti) and pedine_in(avanti).is_empty() and citta_in(avanti).is_empty() and mappa.terreno(avanti) != ZMappa.T.GORGO:
+			var costo_avanti := 2 if mappa.terreno(avanti) == ZMappa.T.BOSCO else 1
+			if mappa.terra(avanti) and pedine_in(avanti).is_empty() and citta_in(avanti).is_empty() and mappa.terreno(avanti) not in [ZMappa.T.GORGO, ZMappa.T.MONTAGNA] and costo_avanti <= u.residuo:
 				var da := u.hex
 				u.hex = avanti
-				u.residuo -= 1
+				u.residuo -= costo_avanti
 				_sporca()
 				eventi.append({"t": "muovi", "u": u.id, "da": [da.x, da.y], "a": [avanti.x, avanti.y]})
 	else:
@@ -925,6 +960,13 @@ func _esegui(az: Dictionary, eventi: Array) -> String:
 	if az.has("b"):
 		az = az.duplicate()
 		az.b = _scorta_di(int(az.b))
+	if az.has("att"):
+		az = az.duplicate()
+		var unici := []
+		for id in az.att:
+			if int(id) not in unici:
+				unici.append(int(id))
+		az.att = unici
 	if az.has("dif"):
 		az = az.duplicate()
 		var nuovi := []
@@ -1179,6 +1221,9 @@ func _fine_schieramento(eventi: Array) -> String:
 		if u.popolo == p and not u.schierata:
 			schieramento_automatico(p)
 			break
+	for u in pedine:
+		if u.popolo == p and not u.schierata:
+			u.viva = false   # nessun posto libero sui continenti: il pezzo resta fuori dal gioco
 	_log("%s hanno schierato le loro forze." % ZRegole.Gli(p))
 	turno += 1
 	if turno >= popoli.size():
@@ -1238,7 +1283,7 @@ func _scompari(u: ZPedina, eventi: Array) -> String:
 		return "Non è il momento."
 	if u.popolo != "Monaci" or u.tipo != "signore":
 		return "Solo i Signori Monaci possono sparire."
-	if u.mosso or u.agito or not u.in_campo() or u.scortato_da >= 0 or u.paralisi > 0:
+	if u.mosso or u.agito or not u.in_campo() or u.scortato_da >= 0 or u.paralisi > 0 or u.mese_scomparsa == turno_globale:
 		return "I Monaci non possono prima muovere e poi scomparire."
 	u.scomparso = true
 	u.mese_scomparsa = turno_globale
@@ -1281,6 +1326,7 @@ func _ricompari(u: ZPedina, h: Vector2i, eventi: Array) -> String:
 	u.scomparso = false
 	u.hex = h
 	u.mosso = false
+	u.mese_scomparsa = turno_globale  # la sparizione è già una mossa: niente nuova sparizione ora
 	_sporca()
 	_log("Il Signore Monaco ricompare.")
 	eventi.append({"t": "ricompare", "u": u.id, "da": [da.x, da.y], "a": [h.x, h.y]})
@@ -1323,8 +1369,20 @@ func _chiudi_movimento(eventi: Array) -> void:
 	# non li ha collocati, riappaiono dove erano spariti.
 	for u in pedine:
 		if u.popolo == p and u.viva and u.scomparso and u.mese_scomparsa < turno_globale:
+			var dove := u.hex
+			if not pedine_in(dove).is_empty() or not citta_in(dove).is_empty():
+				# L'esagono di partenza è stato occupato: il più vicino libero.
+				var libere := destinazioni_ricomparsa(u)
+				if libere.is_empty():
+					continue
+				libere.sort_custom(func(a, b): return mappa.distanza(u.hex, a) < mappa.distanza(u.hex, b))
+				dove = libere[0]
+			var da := u.hex
+			u.hex = dove
 			u.scomparso = false
-			eventi.append({"t": "ricompare", "u": u.id, "da": [u.hex.x, u.hex.y], "a": [u.hex.x, u.hex.y]})
+			u.mese_scomparsa = turno_globale
+			_sporca()
+			eventi.append({"t": "ricompare", "u": u.id, "da": [da.x, da.y], "a": [dove.x, dove.y]})
 	# Due pezzi rimasti sovrapposti senza scorta tornano a formare una coppia.
 	_sporca()
 	for u in pedine:
@@ -1364,6 +1422,8 @@ func _inizia_turno(eventi: Array) -> void:
 			u.carica_dir = -1
 			if u.paralisi > 0:
 				u.paralisi -= 1
+	# Le proposte rimaste senza risposta decadono quando il proponente torna a muovere.
+	proposte.assign(proposte.filter(func(k): return not k.begins_with(p + ">")))
 	singoli_aperti = true
 	mischia_iniziata = false
 	fase = FASE_ALLEANZE if popoli.size() >= 3 else FASE_MOVIMENTO

@@ -260,6 +260,35 @@ func _init() -> void:
 	g.esegui({"a": "assedio", "att": [ass2.id], "c": cm2.id})
 	controlla(cm2.p == "Monaci" and ass2.viva and ass2.agito, "un solo assediante contro due pezzi viene respinto senza combattere")
 
+
+	print("Casi limite segnalati in revisione")
+	g = partita_vuota()
+	p = pianura_aperta(g)
+	var ff := metti(g, "Cavalieri", "fante", p)
+	var sg := metti(g, "Monaci", "signore", g.mappa.vicino_dir(p, 0))
+	g.fase = ZPartita.FASE_COMBATTIMENTO
+	controlla(int(g.esegui({"a": "attacco", "att": [ff.id, ff.id, ff.id], "dif": [sg.id]}).get("eventi", [{}])[0].get("fa", 0)) == 5, "attaccanti ripetuti contano una volta sola")
+	g = partita_vuota()
+	g.turno = 1
+	g.turno_globale = 3
+	p = pianura_aperta(g)
+	var mon := metti(g, "Monaci", "signore", p)
+	g.esegui({"a": "scompari", "u": mon.id})
+	var intruso := metti(g, "Cavalieri", "fante", p)
+	g.turno_globale = 4
+	g.esegui({"a": "fase"})
+	controlla(not mon.scomparso and mon.hex != intruso.hex, "il Monaco non ricompare su un esagono occupato")
+	g = partita_vuota()
+	g.turno = 1
+	g.turno_globale = 3
+	p = pianura_aperta(g)
+	mon = metti(g, "Monaci", "signore", p)
+	g.esegui({"a": "scompari", "u": mon.id})
+	g.turno_globale = 4
+	var d0: Vector2i = g.destinazioni_ricomparsa(mon)[0]
+	g.esegui({"a": "ricompari", "u": mon.id, "h": [d0.x, d0.y]})
+	controlla(not g.esegui({"a": "scompari", "u": mon.id}).ok, "chi ricompare non può sparire di nuovo nella stessa mossa")
+
 	print("Partita automatica e salvataggio")
 	g = ZPartita.new()
 	g.nuova(["Draghi", "Alati"], {"Draghi": "ia", "Alati": "ia"}, 99)

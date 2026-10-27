@@ -10,7 +10,7 @@ func _init() -> void:
 	var ctrl := {}
 	for p in scelti:
 		ctrl[p] = "ia"
-	g.nuova(scelti, ctrl, 12345)
+	g.nuova(scelti, ctrl, int(OS.get_environment("SEME")) if OS.get_environment("SEME") != "" else 12345)
 	var ia := ZIA.new()
 	var azioni := 0
 	var rifiuti := 0

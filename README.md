@@ -96,5 +96,6 @@ Alcuni punti del regolamento sono ambigui. Le scelte fatte qui sono queste:
 - Una guarnigione assediata non può arretrare, quindi qualsiasi esito D la elimina e la città passa all'attaccante.
 - Chi combatte dall'interno di una città non arretra.
 - La carica del Cavaliere è "frontale" quando il nemico si trova sul prolungamento della linea di carica, "laterale" negli altri casi.
-- Le ritirate sono scelte automaticamente nella direzione migliore per chi arretra.
+- Le ritirate sono scelte automaticamente nella direzione migliore per chi arretra; se un pezzo amico spinto non può arretrare, viene sacrificato al posto di chi si ritira solo quando vale meno.
+- Le guarnigioni sono coperte: non esercitano zona d'influenza e i Maghi in città non danno il +2 ai pezzi fuori.
 - Lo scambio degli ostaggi nelle alleanze non è ancora implementato.
