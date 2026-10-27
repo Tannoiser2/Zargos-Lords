@@ -23,15 +23,25 @@ var mese_scomparsa := -1
 var colpi := 0           # frecce o vampe accumulate nella mossa avversaria
 var carica_dir := -1     # direzione della carica (Cavalieri) o della corsa (Serpente)
 var ingaggiata := false  # attaccata in questo turno: la sua zona d'influenza cessa
+# --- Zargo's Lords 2 ---
+var ridotta := false     # girata a faccia in giù: ferma, senza zona d'influenza
+var origine := ""        # tipo originale di una Pantera trasformata
+var trasformata := -1    # turno globale dell'ultima trasformazione
+var catturata := false   # presa nella rete di un Reziario in questo scontro
+var spada := -1          # turno globale in cui vale "Spada di luce"
+var muta := -1           # fino a questo turno globale non può fare magie
+
+func _dati() -> Dictionary:
+	return ZRegole.PEZZI["Magia"][tipo] if tipo == "megadrago" else ZRegole.PEZZI[popolo][tipo]
 
 func c() -> int:
-	return int(ZRegole.PEZZI[popolo][tipo]["c"])
+	return int(_dati()["c"])
 
 func m() -> int:
-	return int(ZRegole.PEZZI[popolo][tipo]["m"])
+	return int(_dati()["m"])
 
 func nome() -> String:
-	return ZRegole.nome_pezzo(popolo, tipo)
+	return String(_dati()["nome"])
 
 func vola() -> bool:
 	return ZRegole.vola(popolo, tipo) and scortato_da < 0
@@ -39,12 +49,20 @@ func vola() -> bool:
 func in_campo() -> bool:
 	return viva and schierata and citta < 0 and not scomparso
 
+## Pezzo in campo e attivo (non ridotto).
+func attivo() -> bool:
+	return in_campo() and not ridotta
+
+func pantera() -> bool:
+	return tipo in ["pantera", "pantera0"]
+
 func a_dict() -> Dictionary:
 	return {
 		"id": id, "p": popolo, "t": tipo, "h": [hex.x, hex.y], "v": viva, "s": schierata,
 		"ci": citta, "sc": scorta, "sd": scortato_da, "mo": mosso, "re": residuo, "ag": agito,
 		"si": singolo, "scc": scorta_cambiata, "pa": paralisi, "sp": scomparso, "ms": mese_scomparsa,
 		"co": colpi, "cd": carica_dir, "in": ingaggiata,
+		"ri": ridotta, "or": origine, "tr": trasformata, "ca": catturata, "sl": spada, "mu": muta,
 	}
 
 static func da_dict(d: Dictionary) -> ZPedina:
@@ -69,4 +87,10 @@ static func da_dict(d: Dictionary) -> ZPedina:
 	p.colpi = int(d.co)
 	p.carica_dir = int(d.cd)
 	p.ingaggiata = bool(d["in"])
+	p.ridotta = bool(d.get("ri", false))
+	p.origine = String(d.get("or", ""))
+	p.trasformata = int(d.get("tr", -1))
+	p.catturata = bool(d.get("ca", false))
+	p.spada = int(d.get("sl", -1))
+	p.muta = int(d.get("mu", -1))
 	return p

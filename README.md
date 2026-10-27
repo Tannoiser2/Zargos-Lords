@@ -1,8 +1,8 @@
 # Zargo's Lords
 
-Versione digitale in Godot 4.7 del wargame fantasy *Zargo's Lords* (International Team), con il gioco base: Cavalieri, Draghi, Alati e Monaci.
+Versione digitale in Godot 4.7 del wargame fantasy *Zargo's Lords* (International Team), con il gioco base (Cavalieri, Draghi, Alati e Monaci) e l'espansione *Zargo's Lords 2* (Amazzoni e Aracnidi, magia, passaggi segreti, guerra lampo).
 
-Si gioca da 2 a 4 popoli. Ognuno può essere guidato da un giocatore allo stesso computer, dall'intelligenza artificiale oppure, online, da un giocatore remoto.
+Si gioca da 2 a 4 popoli, scelti fra sei. Ognuno può essere guidato da un giocatore allo stesso computer, dall'intelligenza artificiale oppure, online, da un giocatore remoto.
 
 Pubblicazione: https://tannoiser2.github.io/Zargos-Lords/
 
@@ -28,6 +28,11 @@ Pubblicazione: https://tannoiser2.github.io/Zargos-Lords/
   - assedi;
   - alleanze libere e tradibili;
   - vittoria per numero di città.
+- **Zargo's Lords 2** (pedine da `docs/original/pedine/zargos2-*.jpg`):
+  - Amazzoni: Signora con il manto magico (ignora blocchi e zone d'influenza), Donne-Pantera che diventano Pantere (12/10), arcieri a cavallo con una propria tabella, fanti che si trasformano in Pantere con un numero pari (al massimo due tentativi per mossa);
+  - Aracnidi: ragni che lasciano fino a tre reti sul percorso (chi ci entra si ferma), Reziari che lanciano la rete prima dello scontro (4-5 cattura, 6 elimina), dardi del Signore;
+  - sei città per popolo, pile di due pezzi dello stesso popolo, pezzi ridotti invece che eliminati contro gli ostacoli e recuperati a fine mossa, frecce in ogni direzione con +1 contro le pile;
+  - regole opzionali: passaggi segreti fra le proprie città, magia (fase propria, punti di preparazione fino a 4, dieci incantesimi entro 10 esagoni da un Signore), guerra lampo (città rase al suolo e punti vittoria).
 - **Tabelle verificate sulle fotografie delle ruote** (`docs/original/wheels`): combattimento, frecce, fiamme, visioni, e il numero di frecce o vampe necessario per eliminare ogni pezzo, stampato sul retro delle ruote.
 - **Mappa logica ricostruita esagono per esagono** dalla mappa del modulo Tabletop Simulator (`assets/board/mappa.png`), in `assets/data/board.json`:
   - reticolo 66 × 53;
@@ -48,6 +53,10 @@ Pubblicazione: https://tannoiser2.github.io/Zargos-Lords/
 - **Intelligenza artificiale**: diplomazia, attacchi singoli, movimento verso le città nemiche, tiri, assedi e scontri valutati sulle probabilità della ruota.
 - **Partita online** tramite Firebase (autenticazione anonima e Realtime Database), con posti assegnati per popolo.
 - **Salvataggio automatico** della partita locale dopo ogni azione.
+
+## Menu iniziale
+
+Accanto al disegno di ogni Signore si sceglie chi guida il popolo: *Umano*, *IA* o *Escluso* (online: *Io*, *Remoto*, *IA*, *Escluso*). Al massimo quattro popoli in campo. Sotto si attivano le regole di Zargo's Lords 2 e le opzioni magia, passaggi segreti e guerra lampo. I disegni dei Signori sono ritagliati da `tools/genera_signori.py`.
 
 ## Opzioni (menu in partita)
 
@@ -106,3 +115,4 @@ Alcuni punti del regolamento sono ambigui. Le scelte fatte qui sono queste:
 - Fantarcieri e Lanciafiamme in attacco possono solo tirare; Maghi, Illusionisti e Signori Draghi scelgono fra lancio e corpo a corpo (chi lancia non combatte più in quella mossa).
 - Il segnalino di sparizione dei Monaci non blocca l'esagono.
 - Lo scambio degli ostaggi nelle alleanze non è ancora implementato.
+- ZL2: la Voragine di fiamme dà mezza città (o metà dei punti in guerra lampo); il Mega drago combatte solo nella mossa in cui è evocato; le Pantere tornano Donne o fanti all'inizio della mossa successiva delle Amazzoni.

@@ -38,6 +38,8 @@ func prossima_azione(g: ZPartita) -> Dictionary:
 			return {"a": "fine_schieramento"}
 		ZPartita.FASE_ALLEANZE:
 			return _alleanze(g)
+		ZPartita.FASE_MAGIA:
+			return _magia(g)
 		ZPartita.FASE_SINGOLI:
 			return _singoli(g)
 		ZPartita.FASE_MOVIMENTO:
@@ -148,6 +150,13 @@ func _movimento(g: ZPartita) -> Dictionary:
 
 func _singoli(g: ZPartita) -> Dictionary:
 	var io := g.popolo_di_mano()
+	# Le Donne-Pantera vicine al nemico si trasformano subito.
+	for u in g.pedine:
+		if u.popolo == io and u.tipo == "donna" and not _fatti.has(6000 + u.id) and g.puo_trasformare(u) == "":
+			_fatti[6000 + u.id] = true
+			for b in g.pedine:
+				if b.attivo() and g.nemici(b.popolo, io) and g.mappa.distanza(u.hex, b.hex) <= 11:
+					return {"a": "trasforma", "u": u.id}
 	# Attacchi singoli di Alati, Falchi e Serpenti.
 	if true:
 		var miglior := {}
@@ -278,7 +287,10 @@ func _miglior_bersaglio_tiro(g: ZPartita, u: ZPedina) -> Dictionary:
 		else:
 			var media := 0.0
 			for dado in range(1, 7):
-				media += ZRegole.frecce(dado, v.distanza) if v.tipo == "frecce" else ZRegole.vampe(dado, v.distanza)
+				match v.tipo:
+					"frecce": media += ZRegole.frecce(dado, v.distanza)
+					"fiamme": media += ZRegole.vampe(dado, v.distanza)
+					_: media += ZRegole.colpi_arcieri_cavallo(dado, v.distanza)
 			media /= 6.0
 			var mancano: int = int(v.servono) - b.colpi
 			val = _valore(b) * clampf(media / maxf(1.0, mancano), 0.0, 1.0)
@@ -291,6 +303,11 @@ func _miglior_bersaglio_tiro(g: ZPartita, u: ZPedina) -> Dictionary:
 
 func _lanci(g: ZPartita) -> Dictionary:
 	var io := g.popolo_di_mano()
+	# Fanti amazzoni a contatto col nemico: tentano di diventare Pantere.
+	for u in g.pedine:
+		if u.popolo == io and u.tipo == "fante" and not _fatti.has(7000 + u.id) and g.puo_trasformare(u) == "" and g.in_zona_nemica(u.hex, io):
+			_fatti[7000 + u.id] = true
+			return {"a": "trasforma", "u": u.id}
 	for u in g.pedine:
 		if u.popolo == io and not _fatti.has(3000 + u.id) and g.tipo_tiro(u) != "" and not u.agito and u.viva and not u.scomparso:
 			_fatti[3000 + u.id] = true
@@ -347,3 +364,37 @@ func _combattimento(g: ZPartita) -> Dictionary:
 		_fatti[4000 + int(miglior.dif[0])] = true
 		return miglior
 	return {"a": "fase"}
+
+
+# --- Magia -----------------------------------------------------------------------
+
+func _magia(g: ZPartita) -> Dictionary:
+	var io := g.popolo_di_mano()
+	if _fatti.has(-20):
+		return {"a": "fase"}
+	_fatti[-20] = true
+	var prep: int = int(g.preparazione.get(io, 0))
+	if prep < ZRegole.MAX_PREPARAZIONE:
+		return {"a": "fase"}
+	# Bersaglio migliore: l'esagono con più forza nemica entro il raggio.
+	var miglior := {}
+	var mv := 0.0
+	for b in g.pedine:
+		if not b.attivo() or not g.nemici(b.popolo, io) or not g.entro_raggio_magia(io, b.hex):
+			continue
+		var forza := 0
+		for v in [b.hex] + g.mappa.vicino_geometrico_tutti(b.hex):
+			for w in g.pedine_in(v):
+				if g.nemici(w.popolo, io):
+					forza += w.c() + (6 if w.tipo == "signore" else 0)
+		if forza > mv:
+			mv = forza
+			miglior = {"h": b.hex}
+	if miglior.is_empty():
+		return {"a": "fase"}
+	var h: Vector2i = miglior.h
+	# Terremoto (7) con 4 punti riesce dal 3 in su; con meno punti il sonno (6).
+	var s := "terremoto" if prep >= 4 else "sonno"
+	if g.valuta_magia(s, h) != "":
+		return {"a": "fase"}
+	return {"a": "magia", "s": s, "h": [h.x, h.y], "punti": prep}

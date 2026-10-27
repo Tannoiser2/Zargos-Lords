@@ -4,6 +4,10 @@ extends RefCounted
 ## (fotografie in docs/original/wheels) e dal regolamento italiano.
 
 const POPOLI: Array[String] = ["Cavalieri", "Draghi", "Alati", "Monaci"]
+## Ordine di mossa con l'espansione Zargo's Lords 2 (regola C).
+const POPOLI_ZL2: Array[String] = ["Cavalieri", "Draghi", "Alati", "Monaci", "Amazzoni", "Aracnidi"]
+const CITTA_ZL2 := 6
+const MESI_LAMPO := 10
 const MESI := 25
 const CITTA_PER_POPOLO := 4
 const MAX_GUARNIGIONE := 4
@@ -84,7 +88,56 @@ const PEZZI := {
 		"cavaliere": {"nome": "Monaco Cavaliere", "c": 5, "m": 9, "q": 12},
 		"fante": {"nome": "Fante", "c": 4, "m": 5, "q": 24},
 	},
+	# Zargo's Lords 2. Quantità contate sui fogli originali.
+	"Amazzoni": {
+		"signore": {"nome": "Signora Amazzone", "c": 7, "m": 7, "q": 7},
+		"donna": {"nome": "Donna-Pantera", "c": 1, "m": 5, "q": 6},
+		"arciere": {"nome": "Arciera a cavallo", "c": 3, "m": 10, "q": 12},
+		"fante": {"nome": "Fante", "c": 3, "m": 6, "q": 30},
+		"pantera": {"nome": "Pantera", "c": 12, "m": 10, "q": 0},
+		"pantera0": {"nome": "Pantera", "c": 12, "m": 0, "q": 0},
+	},
+	"Aracnidi": {
+		"signore": {"nome": "Signore Aracnide", "c": 5, "m": 10, "q": 8},
+		"ragno": {"nome": "Ragno gigante", "c": 8, "m": 12, "q": 5},
+		"reziario": {"nome": "Reziario", "c": 2, "m": 6, "q": 10},
+		"fante": {"nome": "Fante", "c": 4, "m": 5, "q": 35},
+	},
+	# Creature evocate dalla magia nera.
+	"Magia": {
+		"megadrago": {"nome": "Mega drago", "c": 15, "m": 0, "q": 0},
+	},
 }
+
+## Tabella "frecce arcieri a cavallo" (Amazzoni) e dardi degli Aracnidi:
+## colpi per dado (riga) e distanza 1-5 (colonna).
+const TABELLA_ARCIERI_CAVALLO := [
+	[1, 1, 0, 0, 0],
+	[2, 1, 1, 0, 0],
+	[2, 2, 1, 0, 0],
+	[2, 2, 1, 1, 0],
+	[3, 2, 2, 1, 0],
+	[3, 3, 2, 1, 1],
+]
+
+## Tabella delle reti dei Reziari: "" nulla, "C" catturato, "E" eliminato.
+const TABELLA_RETI := ["", "", "", "C", "C", "E"]
+
+## Magia (regola opzionale 2 di Zargo's Lords 2): punteggio minimo.
+const MAGIE := {
+	"frana": {"nome": "Grande frana", "scuola": "bianca", "min": 4, "testo": "Annulla l'effetto delle montagne su movimento e combattimento per questa mossa. Ogni punto in più: un esagono di varco in più."},
+	"ponte": {"nome": "Ponte di pensiero", "scuola": "bianca", "min": 5, "testo": "Crea per questa mossa un ponte di nuvole fra due coste (al massimo 3 esagoni di mare). Ogni punto in più: un ponte in più."},
+	"coraggio": {"nome": "Coraggio illuminato", "scuola": "bianca", "min": 6, "testo": "Recupera un'unità ridotta. Ogni punto in più: un'unità in più."},
+	"spada": {"nome": "Spada di luce", "scuola": "bianca", "min": 7, "testo": "Raddoppia il valore delle proprie unità in un esagono per questa mossa. Ogni punto in più: un esagono di raggio in più."},
+	"rinascita": {"nome": "Seconda nascita", "scuola": "bianca", "min": 8, "testo": "Un signore perso rinasce in una propria città. Ogni punto in più: un signore in più."},
+	"odalische": {"nome": "Odalische infami", "scuola": "nera", "min": 3, "testo": "Un signore nemico non può fare magie nel suo prossimo turno. Ogni punto in più: un signore in più."},
+	"megadrago": {"nome": "Mega drago", "scuola": "nera", "min": 5, "testo": "Crea in un esagono un drago di valore 15 che combatte in questa mossa. Ogni punto in più: un drago in più."},
+	"sonno": {"nome": "Sonno oscuro", "scuola": "nera", "min": 6, "testo": "Riduce le unità nemiche in un esagono. Ogni punto in più: un esagono di raggio in più."},
+	"terremoto": {"nome": "Terremoto", "scuola": "nera", "min": 7, "testo": "Elimina le unità nemiche in un esagono. Ogni punto in più: un esagono di raggio in più."},
+	"voragine": {"nome": "Voragine di fiamme", "scuola": "nera", "min": 8, "testo": "Sprofonda una città nemica con i suoi occupanti (metà dei punti vittoria). Ogni punto in più: una città in più."},
+}
+const MAX_PREPARAZIONE := 4
+const RAGGIO_MAGIA := 10
 
 const DESCRIZIONI := {
 	"Cavalieri/signore": "Carica: se l'intero movimento è in linea retta vale +3 nell'urto frontale, +1 in quello laterale.",
@@ -99,6 +152,16 @@ const DESCRIZIONI := {
 	"Monaci/signore": "Può sparire e ricomparire alla mossa successiva entro il suo movimento.",
 	"Monaci/illusionista": "Una visione per mossa entro 5 esagoni, come un mago, senza bonus ai vicini.",
 	"Monaci/cavaliere": "Nessun potere speciale (niente carica).",
+	"Amazzoni/signore": "Manto magico: durante il movimento attraversa esagoni occupati o controllati dal nemico; alla fine è soggetta alle zone d'influenza.",
+	"Amazzoni/donna": "All'inizio della propria mossa può trasformarsi in Pantera (12/10).",
+	"Amazzoni/arciere": "In alternativa al combattimento tira frecce entro 5 esagoni (tabella degli arcieri a cavallo).",
+	"Amazzoni/fante": "Dopo il movimento, due fanti per mossa possono tentare di trasformarsi in Pantera (12/0): riesce con un dado pari.",
+	"Amazzoni/pantera": "Attacca normalmente o singolarmente. Torna umana all'inizio della prossima mossa amazzone.",
+	"Amazzoni/pantera0": "Attacca normalmente o singolarmente, ma non si muove. Torna fante all'inizio della prossima mossa amazzone.",
+	"Aracnidi/signore": "In alternativa al combattimento lancia frecce avvelenate entro 5 esagoni: basta una freccia in meno per eliminare.",
+	"Aracnidi/ragno": "Durante il movimento lascia fino a tre reti negli esagoni attraversati: per i nemici che arretrano sono un ostacolo.",
+	"Aracnidi/reziario": "Prima dell'esito di uno scontro tenta di imprigionare il nemico: 4-5 catturato (se deve arretrare è eliminato), 6 eliminato.",
+	"Magia/megadrago": "Evocato dalla magia nera: combatte in questa mossa e poi svanisce.",
 }
 
 ## Frecce e vampe necessarie per eliminare ciascun pezzo (testo sul retro
@@ -108,12 +171,18 @@ const FRECCE_NECESSARIE := {
 	"Draghi": {"signore": 6, "serpente": 5, "lanciafiamme": 3, "fante": 3},
 	"Alati": {"signore": 6, "falco": 5, "fantarcere": 3, "fante": 3},
 	"Monaci": {"signore": 6, "illusionista": 6, "cavaliere": 5, "fante": 3},
+	"Amazzoni": {"signore": 6, "donna": 3, "arciere": 5, "fante": 3, "pantera": 5, "pantera0": 5},
+	"Aracnidi": {"signore": 6, "ragno": 5, "reziario": 3, "fante": 3},
+	"Magia": {"megadrago": 99},
 }
 const VAMPE_NECESSARIE := {
 	"Cavalieri": {"signore": 5, "mago": 5, "fantarcere": 3, "fante": 3},
 	"Draghi": {"signore": 0, "serpente": 0, "lanciafiamme": 0, "fante": 3},
 	"Alati": {"signore": 5, "falco": 3, "fantarcere": 3, "fante": 3},
 	"Monaci": {"signore": 5, "illusionista": 5, "cavaliere": 3, "fante": 3},
+	"Amazzoni": {"signore": 5, "donna": 5, "arciere": 5, "fante": 3, "pantera": 5, "pantera0": 5},
+	"Aracnidi": {"signore": 5, "ragno": 5, "reziario": 3, "fante": 3},
+	"Magia": {"megadrago": 99},
 }
 
 const COLORI := {
@@ -121,6 +190,9 @@ const COLORI := {
 	"Draghi": Color("6f8f37"),
 	"Alati": Color("9a68b0"),
 	"Monaci": Color("d9a52a"),
+	"Amazzoni": Color("c4463c"),
+	"Aracnidi": Color("7a9a58"),
+	"Magia": Color("e0b030"),
 }
 
 static func valori(popolo: String, tipo: String) -> Dictionary:
@@ -133,7 +205,10 @@ static func vola(popolo: String, tipo: String) -> bool:
 	return popolo == "Alati" and tipo in ["signore", "falco"]
 
 static func attacco_singolo(popolo: String, tipo: String) -> bool:
-	return vola(popolo, tipo) or (popolo == "Draghi" and tipo == "serpente")
+	return vola(popolo, tipo) or (popolo == "Draghi" and tipo == "serpente") or (popolo == "Amazzoni" and tipo in ["pantera", "pantera0"])
+
+static func signore(tipo: String) -> bool:
+	return tipo == "signore"
 
 static func arciere(tipo: String) -> bool:
 	return tipo == "fantarcere"
@@ -187,15 +262,27 @@ static func probabilita(differenza: int) -> Dictionary:
 			out[e.left(1)] += 1
 	return out
 
-## Articoli: "i Cavalieri", "gli Alati".
+## Articoli: "i Cavalieri", "gli Alati", "le Amazzoni".
 static func gli(p: String) -> String:
-	return ("gli " if p == "Alati" else "i ") + p
+	if p == "Amazzoni":
+		return "le " + p
+	return ("gli " if p in ["Alati", "Aracnidi"] else "i ") + p
 
 static func degli(p: String) -> String:
-	return ("degli " if p == "Alati" else "dei ") + p
+	if p == "Amazzoni":
+		return "delle " + p
+	return ("degli " if p in ["Alati", "Aracnidi"] else "dei ") + p
 
 static func agli(p: String) -> String:
-	return ("agli " if p == "Alati" else "ai ") + p
+	if p == "Amazzoni":
+		return "alle " + p
+	return ("agli " if p in ["Alati", "Aracnidi"] else "ai ") + p
 
 static func Gli(p: String) -> String:
 	return gli(p).capitalize().split(" ")[0] + " " + p
+
+
+static func colpi_arcieri_cavallo(dado: int, distanza: int) -> int:
+	if distanza < 1 or distanza > 5:
+		return 0
+	return TABELLA_ARCIERI_CAVALLO[clampi(dado, 1, 6) - 1][distanza - 1]

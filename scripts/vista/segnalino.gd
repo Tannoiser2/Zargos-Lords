@@ -114,9 +114,16 @@ func prepara(p_id: int, p_popolo: String, p_tipo: String, citta := false) -> voi
 	etichetta.visible = false
 	add_child(etichetta)
 
+static func percorso_faccia(p_popolo: String, t: String) -> String:
+	match t:
+		"retro": return "res://assets/units/retro.png"
+		"megadrago": return "res://assets/units/magia/megadrago.png"
+	return "res://assets/units/%s/%s.png" % [p_popolo.to_lower(), t]
+
 func _imposta_faccia(p_popolo: String, p_tipo: String) -> void:
 	popolo = p_popolo
-	corpo.set_surface_override_material(0, materiale_faccia("res://assets/units/%s/%s.png" % [p_popolo.to_lower(), p_tipo]))
+	_faccia_attuale = p_tipo
+	corpo.set_surface_override_material(0, materiale_faccia(percorso_faccia(p_popolo, p_tipo)))
 	corpo.set_surface_override_material(1, materiale_bordo(ZRegole.COLORI[p_popolo].darkened(0.35)))
 
 var _faccia_attuale := ""
@@ -124,11 +131,35 @@ var _faccia_attuale := ""
 func faccia(t: String) -> void:
 	if t != _faccia_attuale:
 		_faccia_attuale = t
-		corpo.set_surface_override_material(0, materiale_faccia("res://assets/units/%s/%s.png" % [popolo.to_lower(), t]))
+		corpo.set_surface_override_material(0, materiale_faccia(percorso_faccia(popolo, t)))
 
 func cambia_popolo(p: String) -> void:
 	if p != popolo:
 		_imposta_faccia(p, tipo)
+
+## Contorno pulsante per gli effetti in corso (Spada di luce, rete).
+var _alone: MeshInstance3D
+func alone(colore: Color) -> void:
+	if colore.a <= 0.0:
+		if _alone:
+			_alone.visible = false
+		return
+	if _alone == null:
+		_alone = MeshInstance3D.new()
+		var t := TorusMesh.new()
+		t.inner_radius = RAGGIO * 0.98
+		t.outer_radius = RAGGIO * 1.1
+		t.rings = 6
+		t.ring_segments = 4
+		_alone.mesh = t
+		_alone.rotation.y = deg_to_rad(30)
+		var m := StandardMaterial3D.new()
+		m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		_alone.material_override = m
+		_alone.position.y = SPESSORE * 0.5
+		add_child(_alone)
+	_alone.visible = true
+	(_alone.material_override as StandardMaterial3D).albedo_color = colore
 
 func seleziona(attivo: bool, colore: Color = ZTema.OCRA) -> void:
 	anello.visible = attivo

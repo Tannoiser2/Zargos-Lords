@@ -9,6 +9,7 @@ signal cambiata
 
 const FASE_SCHIERAMENTO := "schieramento"
 const FASE_ALLEANZE := "alleanze"
+const FASE_MAGIA := "magia"          # Zargo's Lords 2, regola opzionale
 const FASE_SINGOLI := "singoli"      # attacchi singoli e fiamme del Drago prima di muovere
 const FASE_MOVIMENTO := "movimento"
 const FASE_LANCI := "lanci"          # frecce, fiamme e visioni
@@ -33,6 +34,20 @@ var registro: Array[String] = []
 var vincitori: Array[String] = []
 var rng := RandomNumberGenerator.new()
 
+# --- Zargo's Lords 2 e regole opzionali ---
+var opzioni := {}                        # zl2, magia, passaggi, lampo
+var preparazione := {}                   # popolo -> punti preparazione magica
+var magia_fatta := false                 # magia lanciata in questa mossa
+var terreno_mod := {}                    # "x,y" -> terreno sostituito (Grande frana)
+var ponti_temp: Array = []               # [[x,y],[x,y]] ponti di pensiero di questa mossa
+var reti: Array = []                     # esagoni con le reti dei ragni [x,y]
+var passaggio_usato := false
+var trasformazioni := 0                  # tentativi di trasformazione dei fanti amazzoni
+var bonus_vittoria := {}                 # popolo -> punti extra (Voragine di fiamme)
+var conquiste_lampo := {}                # popolo -> [popolo della città conquistata...]
+var punti_lampo := {}                    # popolo -> punti per le città conquistate
+var n_conquiste := 0
+
 var _indice := {}
 var _indice_valido := false
 
@@ -46,10 +61,16 @@ func _init() -> void:
 ## Crea una nuova partita. `scelti` sono i popoli in gioco (2-4); `ctrl` indica
 ## chi controlla ciascuno. I continenti vengono estratti a sorte come con le
 ## carte dei popoli: con due giocatori ognuno riceve due continenti.
-func nuova(scelti: Array, ctrl: Dictionary, seme := 0) -> void:
+func nuova(scelti: Array, ctrl: Dictionary, seme := 0, opz := {}) -> void:
 	rng.seed = seme if seme != 0 else randi()
+	opzioni = {"zl2": false, "magia": false, "passaggi": false, "lampo": false}
+	opzioni.merge(opz, true)
+	# I popoli dell'espansione richiedono le regole di Zargo's Lords 2.
+	for x in scelti:
+		if x in ["Amazzoni", "Aracnidi"]:
+			opzioni.zl2 = true
 	popoli.clear()
-	for p in ZRegole.POPOLI:
+	for p in ZRegole.POPOLI_ZL2:
 		if p in scelti:
 			popoli.append(p)
 	controllo = ctrl.duplicate()
@@ -77,7 +98,7 @@ func nuova(scelti: Array, ctrl: Dictionary, seme := 0) -> void:
 				u.popolo = p
 				u.tipo = tipo
 				pedine.append(u)
-		for k in ZRegole.CITTA_PER_POPOLO:
+		for k in (ZRegole.CITTA_ZL2 if zl2() else ZRegole.CITTA_PER_POPOLO):
 			citta.append({"id": citta.size(), "p": p, "h": [-1, -1], "g": [], "orig": p})
 	mese = 1
 	turno = 0
@@ -87,6 +108,19 @@ func nuova(scelti: Array, ctrl: Dictionary, seme := 0) -> void:
 	proposte.clear()
 	registro.clear()
 	vincitori.clear()
+	preparazione.clear()
+	bonus_vittoria.clear()
+	conquiste_lampo.clear()
+	punti_lampo.clear()
+	n_conquiste = 0
+	terreno_mod.clear()
+	ponti_temp.clear()
+	reti.clear()
+	for p in popoli:
+		preparazione[p] = 0
+		bonus_vittoria[p] = 0.0
+		conquiste_lampo[p] = []
+		punti_lampo[p] = 0.0
 	_sporca()
 	_log("Il pianeta Zargo attende i suoi Signori. Schieramento %s." % ZRegole.degli(popoli[0]))
 
@@ -96,6 +130,44 @@ func _mescola(a: Array) -> void:
 		var t = a[i]
 		a[i] = a[j]
 		a[j] = t
+
+func zl2() -> bool:
+	return bool(opzioni.get("zl2", false))
+
+func opzione(k: String) -> bool:
+	return bool(opzioni.get(k, false))
+
+func mesi_totali() -> int:
+	return ZRegole.MESI_LAMPO if opzione("lampo") else ZRegole.MESI
+
+## Terreno, tenendo conto degli effetti magici di questa mossa.
+func terreno(h: Vector2i) -> int:
+	var k := "%d,%d" % [h.x, h.y]
+	if terreno_mod.has(k):
+		return int(terreno_mod[k])
+	return mappa.terreno(h)
+
+## Esagoni di terra vicini, compresi i ponti di pensiero di questa mossa.
+func vicini(h: Vector2i) -> Array[Vector2i]:
+	var out := mappa.vicini_terra(h)
+	for pt in ponti_temp:
+		var a := Vector2i(int(pt[0][0]), int(pt[0][1]))
+		var b := Vector2i(int(pt[1][0]), int(pt[1][1]))
+		if a == h and b not in out:
+			out.append(b)
+		elif b == h and a not in out:
+			out.append(a)
+	return out
+
+func ha_rete(h: Vector2i) -> bool:
+	for r in reti:
+		if int(r[0]) == h.x and int(r[1]) == h.y:
+			return true
+	return false
+
+## Valore di combattimento, raddoppiato da "Spada di luce" nella mossa del lancio.
+func valore(u: ZPedina) -> int:
+	return u.c() * (2 if u.spada == turno_globale else 1)
 
 func popolo_di_mano() -> String:
 	return popoli[turno] if turno < popoli.size() else ""
@@ -179,7 +251,7 @@ func bonus_maghi(u: ZPedina) -> int:
 	var b := 0
 	for v in mappa.vicino_geometrico_tutti(u.hex):
 		for w in pedine_in(v):
-			if w.popolo == u.popolo and w.tipo == "mago" and w.popolo == "Cavalieri" and w.scortato_da < 0 and w.paralisi == 0:
+			if w.popolo == u.popolo and w.tipo == "mago" and w.popolo == "Cavalieri" and w.scortato_da < 0 and w.paralisi == 0 and not w.ridotta:
 				b += 2
 	return b
 
@@ -189,7 +261,7 @@ func bonus_terreno(u: ZPedina) -> int:
 	return bonus_terreno_hex(u.hex)
 
 func bonus_terreno_hex(h: Vector2i) -> int:
-	match mappa.terreno(h):
+	match terreno(h):
 		ZMappa.T.MONTAGNA: return 3
 		ZMappa.T.BOSCO: return 1
 	return 0
@@ -198,12 +270,12 @@ func bonus_terreno_hex(h: Vector2i) -> int:
 func in_zona_nemica(h: Vector2i, p: String, escluso := -1) -> bool:
 	for v in mappa.vicino_geometrico_tutti(h):
 		for w in pedine_in(v):
-			if w.id != escluso and nemici(w.popolo, p) and not w.ingaggiata and w.paralisi == 0:
+			if w.id != escluso and nemici(w.popolo, p) and not w.ingaggiata and w.paralisi == 0 and not w.ridotta:
 				return true
 	return false
 
 func attaccabile(u: ZPedina) -> bool:
-	return u != null and u.in_campo() and u.paralisi == 0
+	return u != null and u.in_campo() and u.paralisi == 0 and not u.ridotta
 
 # ---------------------------------------------------------------------------
 # Movimento
@@ -231,6 +303,10 @@ func puo_muovere(u: ZPedina) -> String:
 		return "Non è la mossa di questo popolo."
 	if not u.viva or u.scomparso:
 		return "Pezzo non disponibile."
+	if u.ridotta:
+		return "Pezzo ridotto: resta fermo finché non viene recuperato."
+	if u.m() == 0:
+		return "Questo pezzo non si muove."
 	var g := _guida(u)
 	if g.paralisi > 0:
 		return "Paralizzato nel gorgo magico per altre %d mosse." % g.paralisi
@@ -246,17 +322,20 @@ func raggiungibili(u: ZPedina, ignora_zone := false) -> Dictionary:
 	var g := _guida(u)
 	var budget := punti_movimento(u)
 	var volante := g.vola() and u.scortato_da < 0
+	# Manto magico delle Signore Amazzoni: attraversano nemici e zone d'influenza.
+	var manto := zl2() and g.popolo == "Amazzoni" and g.tipo == "signore"
 	var partenza := g.hex
 	var costi := {partenza: 0}
+	_padri = {}
 	var coda: Array[Vector2i] = [partenza]
 	var i := 0
 	while i < coda.size():
 		var h := coda[i]
 		i += 1
-		if h != partenza and _ferma_qui(h, g, volante, ignora_zone):
+		if h != partenza and _ferma_qui(h, g, volante, ignora_zone or manto):
 			continue
-		for v in mappa.vicini_terra(h):
-			var t := mappa.terreno(v)
+		for v in vicini(h):
+			var t := terreno(v)
 			var costo := 1
 			if not volante:
 				if t == ZMappa.T.BOSCO:
@@ -270,10 +349,11 @@ func raggiungibili(u: ZPedina, ignora_zone := false) -> Dictionary:
 			var nuovo: int = costi[h] + costo
 			if nuovo > budget:
 				continue
-			if _bloccato(v, g, volante):
+			if _bloccato(v, g, volante or manto):
 				continue
 			if not costi.has(v) or nuovo < costi[v]:
 				costi[v] = nuovo
+				_padri[v] = h
 				coda.append(v)
 	# Rimuove le destinazioni in cui non ci si può fermare.
 	var out := {}
@@ -282,8 +362,19 @@ func raggiungibili(u: ZPedina, ignora_zone := false) -> Dictionary:
 			out[h] = costi[h]
 	return out
 
+var _padri := {}
+
+## Percorso (esclusa la partenza) dell'ultimo calcolo di raggiungibili().
+func _percorso(dest: Vector2i) -> Array[Vector2i]:
+	var out: Array[Vector2i] = []
+	var h := dest
+	while _padri.has(h):
+		out.push_front(h)
+		h = _padri[h]
+	return out
+
 func _ferma_qui(h: Vector2i, g: ZPedina, volante: bool, ignora_zone: bool) -> bool:
-	var t := mappa.terreno(h)
+	var t := terreno(h)
 	if t == ZMappa.T.GORGO:
 		return true
 	if not volante and t == ZMappa.T.MONTAGNA:
@@ -301,8 +392,11 @@ func _bloccato(h: Vector2i, g: ZPedina, volante: bool) -> bool:
 		return true
 	if volante:
 		return false
+	if ha_rete(h) and g.popolo != "Aracnidi":
+		return true
 	for w in pedine_in(h):
-		if nemici(w.popolo, g.popolo):
+		# I pezzi ridotti sono transitabili da qualsiasi nemico.
+		if nemici(w.popolo, g.popolo) and not w.ridotta:
 			return true
 	return false
 
@@ -317,6 +411,9 @@ func _puo_fermarsi(h: Vector2i, u: ZPedina) -> bool:
 	var presenti := pedine_in(h)
 	if presenti.is_empty():
 		return true
+	if zl2():
+		# Zargo's Lords 2 (regola D): fino a due pedine dello stesso popolo per esagono.
+		return presenti.size() == 1 and presenti[0].popolo == g.popolo and g.scorta < 0 and u.scortato_da < 0 and presenti[0].scorta < 0 and presenti[0].scortato_da < 0
 	# Unica sovrapposizione ammessa: un fante che si pone di scorta a un altro pezzo.
 	if presenti.size() == 1 and g.scorta < 0 and u.scortato_da < 0:
 		return _scorta_possibile(u, presenti[0])
@@ -334,6 +431,7 @@ func _muovi(u: ZPedina, dest: Vector2i, eventi: Array) -> void:
 		gruppo.append(pedine[g.scorta])
 	var da := g.hex
 	var costo: int = raggiungibili(u).get(dest, 0)
+	var percorso := _percorso(dest)
 	# Carica dei Cavalieri e corsa dei Serpenti: movimento interamente rettilineo.
 	var dir := mappa.direzione_retta(da, dest, 16)
 	var retto := dir >= 0 and _linea_percorribile(g, da, dir, mappa.distanza(da, dest))
@@ -347,7 +445,7 @@ func _muovi(u: ZPedina, dest: Vector2i, eventi: Array) -> void:
 		w.carica_dir = dir if retto else -1
 	_sporca()
 	eventi.append({"t": "muovi", "u": g.id, "da": [da.x, da.y], "a": [dest.x, dest.y]})
-	if mappa.terreno(dest) == ZMappa.T.GORGO:
+	if terreno(dest) == ZMappa.T.GORGO:
 		for w in gruppo:
 			w.paralisi = 3
 		_log("%s %s finisce in un gorgo magico: paralizzato per tre mosse." % [g.nome(), ZRegole.degli(g.popolo)])
@@ -360,8 +458,19 @@ func _muovi(u: ZPedina, dest: Vector2i, eventi: Array) -> void:
 		else:
 			_conquista(ci, g, eventi)
 			return
+	# I ragni lasciano fino a tre reti negli esagoni attraversati.
+	if g.popolo == "Aracnidi" and g.tipo == "ragno":
+		var lasciate := 0
+		for h in percorso.slice(0, percorso.size() - 1):
+			if lasciate >= 3 or reti.size() >= 15:
+				break
+			if not ha_rete(h):
+				reti.append([h.x, h.y])
+				lasciate += 1
+		if lasciate > 0:
+			eventi.append({"t": "reti"})
 	var presenti := pedine_in(dest)
-	if presenti.size() == 2 and g.scorta < 0:
+	if presenti.size() == 2 and g.scorta < 0 and not zl2():
 		var altro: ZPedina = presenti[0] if presenti[1] == g else presenti[1]
 		if _scorta_possibile(g, altro):
 			g.scorta = altro.id
@@ -380,7 +489,7 @@ func _linea_percorribile(g: ZPedina, da: Vector2i, dir: int, passi: int) -> bool
 		h = mappa.vicino_dir(h, dir)
 		if not mappa.terra(h) or _bloccato(h, g, volante):
 			return false
-		var t := mappa.terreno(h)
+		var t := terreno(h)
 		if not volante and t == ZMappa.T.MONTAGNA:
 			return false
 		if i < passi - 1 and (t == ZMappa.T.GORGO or _ferma_qui(h, g, volante, false)):
@@ -402,6 +511,24 @@ func _esci_da_citta(u: ZPedina) -> void:
 
 func _conquista(ci: Dictionary, conquistatore: ZPedina, eventi: Array) -> void:
 	var vecchio: String = ci.p
+	if opzione("lampo"):
+		# Guerra lampo: la città conquistata viene tolta dalla mappa e tenuta
+		# dal conquistatore come trofeo.
+		_punti_conquista(conquistatore.popolo, vecchio, 1.0)
+		for id in ci.g.duplicate():
+			pedine[id].viva = false
+			pedine[id].citta = -1
+		ci.g.clear()
+		var hc := hex_citta(ci)
+		ci.h = [-1, -1]
+		ci.p = ""
+		conquistatore.hex = hc
+		if conquistatore.scorta >= 0:
+			pedine[conquistatore.scorta].hex = hc
+		_log("%s conquistano e radono al suolo una città %s!" % [ZRegole.Gli(conquistatore.popolo), ZRegole.degli(vecchio)])
+		eventi.append({"t": "conquista", "c": ci.id, "p": conquistatore.popolo, "da": vecchio, "rasa": true, "h": [hc.x, hc.y]})
+		_sporca()
+		return
 	ci.p = conquistatore.popolo
 	for id in ci.g.duplicate():
 		pedine[id].viva = false
@@ -419,6 +546,15 @@ func _conquista(ci: Dictionary, conquistatore: ZPedina, eventi: Array) -> void:
 	_log("%s conquistano una città %s!" % [ZRegole.Gli(conquistatore.popolo), ZRegole.degli(vecchio)])
 	eventi.append({"t": "conquista", "c": ci.id, "p": conquistatore.popolo, "da": vecchio})
 	_sporca()
+
+## Punteggio della Guerra lampo: 18, 16, 14 ... 4 punti per le prime otto città
+## conquistate nella partita, poi 2.
+func _punti_conquista(p: String, da: String, frazione: float) -> void:
+	n_conquiste += 1
+	var punti := 20 - 2 * n_conquiste if n_conquiste <= 8 else 2
+	punti_lampo[p] = float(punti_lampo.get(p, 0)) + punti * frazione
+	if da != "":
+		conquiste_lampo[p].append(da)
 
 # ---------------------------------------------------------------------------
 # Ritirate ed eliminazioni
@@ -455,10 +591,21 @@ func _ritira(u: ZPedina, passi: int, minaccia: String, eventi: Array) -> void:
 		# Chi combatte dall'interno di una città vi resta al riparo.
 		return
 	var u_guida := _guida(u)
+	if u_guida.catturata:
+		# Preso nella rete di un Reziario: se deve arretrare è eliminato.
+		_log("%s %s, preso nella rete, non può arretrare." % [u_guida.nome(), ZRegole.degli(u_guida.popolo)])
+		_elimina(u_guida, minaccia, eventi)
+		return
 	var migliore := {}
 	var miglior_punteggio := -INF
+	var riduzione := {}
 	for dir in 6:
 		var prova := _simula_ritirata(u_guida, dir, passi)
+		if prova.has("ridotta"):
+			# Zargo's Lords 2: contro un ostacolo il pezzo non è eliminato ma ridotto.
+			if riduzione.is_empty() or int(prova.passi) > int(riduzione.passi):
+				riduzione = prova
+			continue
 		if prova.is_empty():
 			continue
 		var punteggio: float = -float(prova.perdite) * 100.0
@@ -473,6 +620,16 @@ func _ritira(u: ZPedina, passi: int, minaccia: String, eventi: Array) -> void:
 	# Sacrificare un pezzo spinto conviene solo se vale meno di chi arretra.
 	if not migliore.is_empty() and int(migliore.sacrificio) >= 0 and int(migliore.perdite) > u_guida.c():
 		migliore = {}
+	if migliore.is_empty() and not riduzione.is_empty():
+		var dove := Vector2i(int(riduzione.fine[0]), int(riduzione.fine[1]))
+		if dove != u_guida.hex:
+			_sposta_gruppo(u_guida, dove, eventi, "ritira")
+		u_guida.ridotta = true
+		if u_guida.scorta >= 0:
+			pedine[u_guida.scorta].ridotta = true
+		_log("%s %s arretra contro un ostacolo e viene ridotto." % [u_guida.nome(), ZRegole.degli(u_guida.popolo)])
+		eventi.append({"t": "ridotta", "u": u_guida.id})
+		return
 	if migliore.is_empty():
 		_log("%s %s non ha via di fuga." % [u_guida.nome(), ZRegole.degli(u_guida.popolo)])
 		var gruppo := [u_guida]
@@ -489,7 +646,7 @@ func _ritira(u: ZPedina, passi: int, minaccia: String, eventi: Array) -> void:
 		var w: ZPedina = pedine[spinta[0]]
 		var dest := Vector2i(spinta[1][0], spinta[1][1])
 		_sposta_gruppo(w, dest, eventi, "ritira")
-		if mappa.terreno(dest) == ZMappa.T.GORGO:
+		if terreno(dest) == ZMappa.T.GORGO:
 			w.paralisi = 3
 			if w.scorta >= 0:
 				pedine[w.scorta].paralisi = 3
@@ -510,16 +667,23 @@ func _sposta_gruppo(w: ZPedina, dest: Vector2i, eventi: Array, tipo: String) -> 
 	eventi.append({"t": tipo, "u": w.id, "da": [da.x, da.y], "a": [dest.x, dest.y]})
 
 func _ostacolo_ritirata(h: Vector2i, p: String, escludi: Array) -> bool:
+	return _tipo_ostacolo(h, p) != ""
+
+## "" = libero; "terreno" = mare, boschi, monti, città o reti; "nemico" = pezzi
+## o zone d'influenza nemiche.
+func _tipo_ostacolo(h: Vector2i, p: String) -> String:
 	if not mappa.terra(h):
-		return true
-	if mappa.terreno(h) in [ZMappa.T.BOSCO, ZMappa.T.MONTAGNA]:
-		return true
+		return "terreno"
+	if terreno(h) in [ZMappa.T.BOSCO, ZMappa.T.MONTAGNA]:
+		return "terreno"
 	if not citta_in(h).is_empty():
-		return true
+		return "terreno"
+	if ha_rete(h) and p != "Aracnidi":
+		return "terreno"
 	for w in pedine_in(h):
 		if nemici(w.popolo, p):
-			return true
-	return in_zona_nemica(h, p)
+			return "nemico"
+	return "nemico" if in_zona_nemica(h, p) else ""
 
 func _simula_ritirata(u: ZPedina, dir: int, passi: int) -> Dictionary:
 	var h := u.hex
@@ -527,16 +691,29 @@ func _simula_ritirata(u: ZPedina, dir: int, passi: int) -> Dictionary:
 	var gorgo := false
 	for i in passi:
 		h = mappa.vicino_dir(h, dir)
-		if _ostacolo_ritirata(h, u.popolo, []):
+		var ost := _tipo_ostacolo(h, u.popolo)
+		if ost == "terreno" and zl2():
+			var fine_r: Vector2i = percorso[-1] if not percorso.is_empty() else u.hex
+			if not pedine_in(fine_r).is_empty() and fine_r != u.hex:
+				return {}
+			return {"ridotta": true, "fine": [fine_r.x, fine_r.y], "passi": percorso.size()}
+		if ost != "":
 			return {}
 		percorso.append(h)
-		if mappa.terreno(h) == ZMappa.T.GORGO:
+		if terreno(h) == ZMappa.T.GORGO:
 			gorgo = true
 			break
 	var fine := percorso[-1]
 	var spinte := []
 	var perdite := 0
 	var sacrificio := -1
+	if zl2():
+		# Zargo's Lords 2: si passa sopra i propri pezzi; ci si ferma solo dove
+		# l'ammassamento lo consente (al massimo due pedine dello stesso popolo).
+		var qui := pedine_in(fine).filter(func(w): return w != u and w.id != u.scorta)
+		if qui.size() >= 2 or (qui.size() == 1 and qui[0].popolo != u.popolo):
+			return {}
+		return {"fine": fine, "spinte": [], "perdite": 0, "sacrificio": -1, "gorgo": gorgo, "da": [u.hex.x, u.hex.y]}
 	# Pezzi amici sull'esagono finale: vengono spinti avanti lungo la stessa linea.
 	var occupante := pedina_in(fine)
 	var cursore := fine
@@ -549,7 +726,7 @@ func _simula_ritirata(u: ZPedina, dir: int, passi: int) -> Dictionary:
 			break
 		spinte.push_front([occupante.id, [avanti.x, avanti.y]])
 		cursore = avanti
-		if mappa.terreno(avanti) == ZMappa.T.GORGO:
+		if terreno(avanti) == ZMappa.T.GORGO:
 			break
 		occupante = pedina_in(avanti)
 	return {"fine": fine, "spinte": spinte, "perdite": perdite, "sacrificio": sacrificio, "gorgo": gorgo, "da": [u.hex.x, u.hex.y]}
@@ -561,13 +738,13 @@ func _simula_ritirata(u: ZPedina, dir: int, passi: int) -> Dictionary:
 func forza_attacco(att: Array, difensore: ZPedina) -> int:
 	var tot := 0
 	for u in att:
-		tot += u.c() + bonus_maghi(u) + bonus_carica(u, difensore)
+		tot += valore(u) + bonus_maghi(u) + bonus_carica(u, difensore)
 	return tot
 
 func forza_difesa(dif: Array) -> int:
 	var tot := 0
 	for u in dif:
-		tot += u.c() + bonus_maghi(u) + bonus_terreno(u)
+		tot += valore(u) + bonus_maghi(u) + bonus_terreno(u)
 	return tot
 
 ## Carica del Signore Cavaliere: +3 se l'urto prosegue la linea della carica,
@@ -590,12 +767,28 @@ func puo_attaccare(u: ZPedina) -> String:
 		return "Paralizzato nel gorgo."
 	if u.scortato_da >= 0:
 		return "Un pezzo scortato non ha alcun potere."
+	if u.ridotta:
+		return "Pezzo ridotto: non può combattere."
 	if ZRegole.arciere(u.tipo) or u.tipo == "lanciafiamme":
 		return "In attacco questo pezzo può soltanto tirare."
 	return ""
 
+## Zargo's Lords 2: chi attacca un esagono con due pedine le affronta insieme.
+func espandi_difensori(ids: Array) -> Array:
+	var nuovi := []
+	for id in ids:
+		var x := _scorta_di(int(id))
+		if x not in nuovi:
+			nuovi.append(x)
+		if zl2():
+			for w in pedine_in(pedine[x].hex):
+				if w.id not in nuovi and w.popolo == pedine[x].popolo and not w.ridotta:
+					nuovi.append(w.id)
+	return nuovi
+
 ## Analisi di uno scontro prima di tirare il dado (usata da interfaccia e IA).
 func valuta_attacco(att_ids: Array, dif_ids: Array) -> Dictionary:
+	dif_ids = espandi_difensori(dif_ids)
 	var att: Array[ZPedina] = []
 	var dif: Array[ZPedina] = []
 	for id in att_ids:
@@ -604,7 +797,10 @@ func valuta_attacco(att_ids: Array, dif_ids: Array) -> Dictionary:
 		dif.append(pedine[id])
 	if att.is_empty() or dif.is_empty():
 		return {"ok": false, "errore": "Scegli attaccanti e difensori."}
-	if att.size() > 1 and dif.size() > 1:
+	var esagoni_dif := {}
+	for d in dif:
+		esagoni_dif[d.hex] = true
+	if att.size() > 1 and esagoni_dif.size() > 1:
 		return {"ok": false, "errore": "Si attacca con più pezzi un solo nemico, o con un solo pezzo più nemici."}
 	for u in att:
 		var e := puo_attaccare(u)
@@ -626,6 +822,23 @@ func valuta_attacco(att_ids: Array, dif_ids: Array) -> Dictionary:
 	return {"ok": true, "fa": fa, "fd": fd, "diff": diff, "prob": ZRegole.probabilita(diff)}
 
 func _risolvi(att: Array[ZPedina], dif: Array[ZPedina], eventi: Array, singolo := false) -> String:
+	# Reti dei Reziari: si tirano prima di leggere l'esito dello scontro.
+	for u in att:
+		if u.popolo == "Aracnidi" and u.tipo == "reziario":
+			var dr := rng.randi_range(1, 6)
+			var r: String = ZRegole.TABELLA_RETI[dr - 1]
+			eventi.append({"t": "rete", "u": u.id, "dado": dr, "esito": r, "dif": dif.map(func(d): return d.id)})
+			if r == "E":
+				_log("La rete di un Reziario (dado %d) imprigiona e uccide %s." % [dr, _elenco(dif)])
+				for u2 in att:
+					u2.agito = true
+				for d in dif:
+					_elimina(d, u.popolo, eventi)
+				return "DE"
+			if r == "C":
+				_log("La rete di un Reziario (dado %d) cattura %s: se arretra è eliminato." % [dr, _elenco(dif)])
+				for d in dif:
+					d.catturata = true
 	var fa := forza_attacco(att, dif[0])
 	var fd := forza_difesa(dif)
 	var diff := fa - fd
@@ -649,6 +862,7 @@ func _risolvi(att: Array[ZPedina], dif: Array[ZPedina], eventi: Array, singolo :
 	_applica_esito(esito, att, dif, eventi)
 	for d in dif:
 		d.ingaggiata = false
+		d.catturata = false
 	return esito
 
 func _applica_esito(esito: String, att: Array[ZPedina], dif: Array[ZPedina], eventi: Array) -> void:
@@ -665,7 +879,12 @@ func _applica_esito(esito: String, att: Array[ZPedina], dif: Array[ZPedina], eve
 			_ritira(u, int(esito.right(1)), p_dif, eventi)
 	elif esito.begins_with("D"):
 		for d in dif:
-			_ritira(d, int(esito.right(1)), p_att, eventi)
+			var passi := int(esito.right(1))
+			# Zargo's Lords 2, regola H: D5 vale D4 per i fanti dei Cavalieri
+			# e i fantarcieri degli Alati.
+			if zl2() and passi == 5 and ((d.popolo == "Cavalieri" and d.tipo == "fante") or (d.popolo == "Alati" and d.tipo == "fantarcere")):
+				passi = 4
+			_ritira(d, passi, p_att, eventi)
 
 func _elenco(lista: Array) -> String:
 	var nomi := {}
@@ -716,10 +935,10 @@ func _assedio(att: Array[ZPedina], ci: Dictionary, eventi: Array) -> void:
 		return
 	var fa := 0
 	for u in att:
-		fa += u.c() + bonus_maghi(u)
+		fa += valore(u) + bonus_maghi(u)
 	var fd := 0
 	for g in gu:
-		fd += g.c()
+		fd += valore(g)
 	var diff := fa - fd
 	for u in att:
 		u.agito = true
@@ -733,6 +952,9 @@ func _assedio(att: Array[ZPedina], ci: Dictionary, eventi: Array) -> void:
 	var esito := ZRegole.esito_combattimento(diff, dado)
 	eventi.append({"t": "combattimento", "att": att.map(func(u): return u.id), "dif": ci.g.duplicate(), "fa": fa, "fd": fd, "diff": diff, "fascia": ZRegole.fascia(diff), "dado": dado, "esito": esito, "citta": ci.id, "ha": att.map(func(u): return [u.hex.x, u.hex.y]), "hd": [ci.h], "pa": att[0].popolo, "pd": ci.p})
 	_log("Assedio a una città %s: %d contro %d, dado %d » %s" % [ZRegole.degli(ci.p), fa, fd, dado, esito])
+	if zl2() and esito in ["D1", "D3"]:
+		# Zargo's Lords 2, regola I: contro una città D1 e D3 valgono A1.
+		esito = "A1"
 	if esito.begins_with("D"):
 		# Il primo assediante entra: si preferisce un fante.
 		var entra: ZPedina = att[0]
@@ -753,8 +975,14 @@ func _assedio(att: Array[ZPedina], ci: Dictionary, eventi: Array) -> void:
 # ---------------------------------------------------------------------------
 
 func tipo_tiro(u: ZPedina) -> String:
+	if u.ridotta:
+		return ""
 	if ZRegole.arciere(u.tipo):
 		return "frecce"
+	if u.popolo == "Amazzoni" and u.tipo == "arciere":
+		return "cavallo"
+	if u.popolo == "Aracnidi" and u.tipo == "signore":
+		return "dardi"
 	if ZRegole.fiamme(u.popolo, u.tipo):
 		return "fiamme"
 	if ZRegole.visioni(u.popolo, u.tipo):
@@ -764,7 +992,7 @@ func tipo_tiro(u: ZPedina) -> String:
 func gittata(u: ZPedina) -> int:
 	match tipo_tiro(u):
 		"frecce": return 8
-		"fiamme", "visione": return 5
+		"fiamme", "visione", "cavallo", "dardi": return 5
 	return 0
 
 func valuta_tiro(u: ZPedina, b: ZPedina) -> Dictionary:
@@ -789,24 +1017,32 @@ func valuta_tiro(u: ZPedina, b: ZPedina) -> Dictionary:
 	var d := mappa.distanza(u.hex, b.hex)
 	if d > gittata(u):
 		return {"ok": false, "errore": "Bersaglio fuori portata (%d esagoni, massimo %d)." % [d, gittata(u)]}
-	if tipo == "frecce":
+	if tipo in ["frecce", "cavallo", "dardi"]:
 		var e := _linea_di_tiro(u, b)
 		if e != "":
 			return {"ok": false, "errore": e}
-		var serve: int = ZRegole.FRECCE_NECESSARIE[b.popolo][b.tipo]
+		var serve: int = ZRegole.FRECCE_NECESSARIE[_tab_popolo(b)][b.tipo]
+		if tipo == "dardi":
+			serve -= 1   # le frecce avvelenate sono più efficaci
 		return {"ok": true, "tipo": tipo, "distanza": d, "servono": serve, "gia": b.colpi}
 	if tipo == "fiamme":
-		var serve: int = ZRegole.VAMPE_NECESSARIE[b.popolo][b.tipo]
+		var serve: int = ZRegole.VAMPE_NECESSARIE[_tab_popolo(b)][b.tipo]
 		if serve == 0:
 			return {"ok": false, "errore": "Il popolo dei Draghi è immune al fuoco."}
 		return {"ok": true, "tipo": tipo, "distanza": d, "servono": serve, "gia": b.colpi}
 	return {"ok": true, "tipo": tipo, "distanza": d}
 
+func _tab_popolo(b: ZPedina) -> String:
+	return "Magia" if b.tipo == "megadrago" else b.popolo
+
 func _linea_di_tiro(u: ZPedina, b: ZPedina) -> String:
-	if mappa.terreno(u.hex) == ZMappa.T.BOSCO and u.citta < 0:
+	if terreno(u.hex) == ZMappa.T.BOSCO and u.citta < 0:
 		return "Non si può tirare da dentro un bosco."
-	if mappa.terreno(b.hex) == ZMappa.T.BOSCO:
+	if terreno(b.hex) == ZMappa.T.BOSCO:
 		return "Non si può tirare dentro un bosco."
+	if zl2():
+		# Zargo's Lords 2, regola D: le frecce si tirano in qualsiasi direzione.
+		return ""
 	var dir := mappa.direzione_retta(u.hex, b.hex, 8)
 	if dir < 0:
 		return "Le frecce volano soltanto in linea retta lungo gli esagoni."
@@ -815,7 +1051,7 @@ func _linea_di_tiro(u: ZPedina, b: ZPedina) -> String:
 		h = mappa.vicino_dir(h, dir)
 		if h == b.hex:
 			break
-		var t := mappa.terreno(h)
+		var t := terreno(h)
 		if t in [ZMappa.T.MONTAGNA, ZMappa.T.BOSCO, ZMappa.T.GORGO]:
 			return "La linea di tiro è bloccata da %s." % ZMappa.NOMI_TERRENO[t].to_lower()
 		if not citta_in(h).is_empty():
@@ -832,11 +1068,23 @@ func _tiro(u: ZPedina, b: ZPedina, eventi: Array) -> void:
 		_log("Visione di %s su %s %s: dado %d, distanza %d » fuga di %d." % [u.nome(), b.nome(), ZRegole.degli(b.popolo), dado, v.distanza, fuga])
 		_ritira(b, fuga, u.popolo, eventi)
 		return
-	var colpi := ZRegole.frecce(dado, v.distanza) if v.tipo == "frecce" else ZRegole.vampe(dado, v.distanza)
+	# Zargo's Lords 2: +1 al dado contro un esagono con due pedine; le fiamme
+	# contro un bosco +2.
+	var dado_mod := dado
+	if zl2() and pedine_in(b.hex).size() >= 2:
+		dado_mod += 1
+	if v.tipo == "fiamme" and terreno(b.hex) == ZMappa.T.BOSCO:
+		dado_mod += 2
+	dado_mod = mini(dado_mod, 6)
+	var colpi := 0
+	match v.tipo:
+		"frecce": colpi = ZRegole.frecce(dado_mod, v.distanza)
+		"fiamme": colpi = ZRegole.vampe(dado_mod, v.distanza)
+		_: colpi = ZRegole.colpi_arcieri_cavallo(dado_mod, v.distanza)
 	b.colpi += colpi
 	var eliminato: bool = b.colpi >= int(v.servono)
 	eventi.append({"t": "tiro", "tipo": v.tipo, "u": u.id, "b": b.id, "dado": dado, "distanza": v.distanza, "colpi": colpi, "totale": b.colpi, "servono": v.servono, "eliminato": eliminato})
-	_log("%s di %s su %s: dado %d, distanza %d » %d a segno (%d/%d)." % ["Frecce" if v.tipo == "frecce" else "Fiamme", u.nome(), b.nome(), dado, v.distanza, colpi, b.colpi, v.servono])
+	_log("%s di %s su %s: dado %d, distanza %d » %d a segno (%d/%d)." % [{"frecce": "Frecce", "fiamme": "Fiamme", "cavallo": "Frecce", "dardi": "Frecce avvelenate"}[v.tipo], u.nome(), b.nome(), dado, v.distanza, colpi, b.colpi, v.servono])
 	if eliminato:
 		_elimina(b, u.popolo, eventi)
 
@@ -848,8 +1096,8 @@ func puo_attacco_singolo(u: ZPedina) -> String:
 	if fase != FASE_SINGOLI or u.popolo != popolo_di_mano():
 		return "Gli attacchi singoli si fanno nella loro fase, prima di qualsiasi altro movimento."
 	if not ZRegole.attacco_singolo(u.popolo, u.tipo):
-		return "Solo Alati, Falchi e Serpenti attaccano singolarmente."
-	if u.scortato_da >= 0 or u.paralisi > 0 or not u.in_campo():
+		return "Solo Alati, Falchi, Serpenti e Pantere attaccano singolarmente."
+	if u.scortato_da >= 0 or u.paralisi > 0 or not u.attivo():
 		return "Pezzo non disponibile."
 	if u.singolo:
 		if u.tipo == "serpente" and u.residuo > 0 and u.carica_dir >= 0:
@@ -874,7 +1122,7 @@ func basi_attacco_singolo(u: ZPedina, b: ZPedina) -> Array[Vector2i]:
 		var speso := 0
 		while true:
 			h = mappa.vicino_dir(h, u.carica_dir)
-			var t := mappa.terreno(h)
+			var t := terreno(h)
 			if not mappa.terra(h) or not pedine_in(h).is_empty() or not citta_in(h).is_empty() or t in [ZMappa.T.MONTAGNA, ZMappa.T.GORGO]:
 				break
 			speso += 2 if t == ZMappa.T.BOSCO else 1
@@ -903,7 +1151,7 @@ func _attacco_singolo(u: ZPedina, b: ZPedina, base: Vector2i, eventi: Array) -> 
 			var h := u.hex
 			while h != base:
 				h = mappa.vicino_dir(h, u.carica_dir)
-				costo += 2 if mappa.terreno(h) == ZMappa.T.BOSCO else 1
+				costo += 2 if terreno(h) == ZMappa.T.BOSCO else 1
 		else:
 			costo = int(raggiungibili(u, true).get(base, 0))
 		var da := u.hex
@@ -925,8 +1173,8 @@ func _attacco_singolo(u: ZPedina, b: ZPedina, base: Vector2i, eventi: Array) -> 
 		if u.tipo == "serpente" and u.residuo > 0:
 			# Il serpente avanza nell'esagono lasciato libero e può proseguire la carica.
 			var avanti := mappa.vicino_dir(u.hex, u.carica_dir)
-			var costo_avanti := 2 if mappa.terreno(avanti) == ZMappa.T.BOSCO else 1
-			if mappa.terra(avanti) and pedine_in(avanti).is_empty() and citta_in(avanti).is_empty() and mappa.terreno(avanti) not in [ZMappa.T.GORGO, ZMappa.T.MONTAGNA] and costo_avanti <= u.residuo:
+			var costo_avanti := 2 if terreno(avanti) == ZMappa.T.BOSCO else 1
+			if mappa.terra(avanti) and pedine_in(avanti).is_empty() and citta_in(avanti).is_empty() and terreno(avanti) not in [ZMappa.T.GORGO, ZMappa.T.MONTAGNA] and costo_avanti <= u.residuo:
 				var da := u.hex
 				u.hex = avanti
 				u.residuo -= costo_avanti
@@ -972,12 +1220,7 @@ func _esegui(az: Dictionary, eventi: Array) -> String:
 		az.att = unici
 	if az.has("dif"):
 		az = az.duplicate()
-		var nuovi := []
-		for id in az.dif:
-			var s := _scorta_di(int(id))
-			if s not in nuovi:
-				nuovi.append(s)
-		az.dif = nuovi
+		az.dif = espandi_difensori(az.dif)
 	match String(az.get("a", "")):
 		"piazza":
 			return _piazza(pedine[int(az.u)], _hex(az.h))
@@ -1027,6 +1270,12 @@ func _esegui(az: Dictionary, eventi: Array) -> String:
 			return _ricompari(pedine[int(az.u)], _hex(az.h), eventi)
 		"togli_scorta":
 			return _togli_scorta(pedine[int(az.u)])
+		"trasforma":
+			return _trasforma(pedine[int(az.u)], eventi)
+		"passaggio":
+			return _passaggio(pedine[int(az.u)], int(az.c), eventi)
+		"magia":
+			return _magia(String(az.s), _hex(az.h), az.get("h2", null), int(az.get("punti", 0)), eventi)
 		"tiro":
 			var u := pedine[int(az.u)]
 			var b := pedine[int(az.b)]
@@ -1110,8 +1359,16 @@ func citta_valida(ci: Dictionary, h: Vector2i) -> String:
 		return "Le città si pongono sui propri continenti."
 	if mappa.costa(h):
 		return "Le città non possono essere piazzate in esagoni di costa."
-	if mappa.terreno(h) == ZMappa.T.GORGO:
+	if terreno(h) == ZMappa.T.GORGO:
 		return "Non si costruisce in un gorgo magico."
+	if zl2():
+		# Zargo's Lords 2, regola B: niente boschi, montagne, gorghi, coste e
+		# ponti, né esagoni adiacenti.
+		if terreno(h) != ZMappa.T.PIANURA:
+			return "Le città vanno in pianura."
+		for v in mappa.vicino_geometrico_tutti(h):
+			if terreno(v) != ZMappa.T.PIANURA or mappa.costa(v):
+				return "Le città non possono essere adiacenti a boschi, montagne, gorghi, coste o ponti."
 	for altra in citta:
 		if altra.id != ci.id and altra.h[0] >= 0 and mappa.distanza(hex_citta(altra), h) < ZRegole.DISTANZA_MIN_CITTA:
 			return "Le città devono distare almeno quattro esagoni l'una dall'altra."
@@ -1157,7 +1414,7 @@ func schieramento_automatico(p: String) -> void:
 				if altra.h[0] >= 0 and altra.id != ci.id:
 					piu_vicina = mini(piu_vicina, mappa.distanza(hex_citta(altra), h))
 			punteggio += minf(piu_vicina, 9) * 2.0
-			if mappa.terreno(h) == ZMappa.T.MONTAGNA:
+			if terreno(h) == ZMappa.T.MONTAGNA:
 				punteggio += 3.0
 			punteggio += rng.randf() * 4.0
 			if punteggio > miglior:
@@ -1188,7 +1445,7 @@ func schieramento_automatico(p: String) -> void:
 				cc.append(hex_citta(ci))
 		var ordinati := []
 		for h in es:
-			if mappa.terreno(h) == ZMappa.T.GORGO or not citta_in(h).is_empty():
+			if terreno(h) == ZMappa.T.GORGO or not citta_in(h).is_empty():
 				continue
 			var d := 99
 			for c in cc:
@@ -1304,9 +1561,9 @@ func destinazioni_ricomparsa(u: ZPedina) -> Array[Vector2i]:
 		i += 1
 		if dist[h] >= u.m():
 			continue
-		for v in mappa.vicini_terra(h):
+		for v in vicini(h):
 			# Da scomparsi non si attraversano né il mare senza ponti né i gorghi.
-			if mappa.terreno(v) == ZMappa.T.GORGO or dist.has(v):
+			if terreno(v) == ZMappa.T.GORGO or dist.has(v):
 				continue
 			dist[v] = dist[h] + 1
 			coda.append(v)
@@ -1348,6 +1605,279 @@ func _togli_scorta(u: ZPedina) -> String:
 	_log("La scorta viene tolta: il pezzo riacquista i suoi poteri.")
 	return ""
 
+# --- Amazzoni: trasformazioni ----------------------------------------------------
+
+func puo_trasformare(u: ZPedina) -> String:
+	if u.popolo != "Amazzoni" or u.popolo != popolo_di_mano() or not u.attivo():
+		return "Solo Donne-Pantera e fanti amazzoni si trasformano."
+	if u.trasformata >= turno_globale:
+		return "Si è appena trasformata: niente altre trasformazioni in questa mossa."
+	if u.tipo == "donna":
+		if fase != FASE_SINGOLI:
+			return "Le Donne-Pantera si trasformano all'inizio della mossa (fase degli attacchi singoli)."
+		if u.mosso or u.agito:
+			return "Ha già agito."
+		return ""
+	if u.tipo == "fante":
+		if fase not in [FASE_LANCI, FASE_COMBATTIMENTO] or mischia_iniziata:
+			return "I fanti tentano la trasformazione dopo il movimento e prima degli scontri."
+		if trasformazioni >= 2:
+			return "Si possono tentare al massimo due trasformazioni di fanti per mossa."
+		if u.agito:
+			return "Ha già agito."
+		return ""
+	return "Questo pezzo non si trasforma."
+
+func _trasforma(u: ZPedina, eventi: Array) -> String:
+	var e := puo_trasformare(u)
+	if e != "":
+		return e
+	if u.tipo == "donna":
+		u.origine = "donna"
+		u.tipo = "pantera"
+		u.trasformata = turno_globale
+		_log("Una Donna-Pantera si trasforma in Pantera.")
+		eventi.append({"t": "trasforma", "u": u.id})
+		return ""
+	trasformazioni += 1
+	u.trasformata = turno_globale
+	var d := rng.randi_range(1, 6)
+	if d % 2 == 0:
+		u.origine = "fante"
+		u.tipo = "pantera0"
+		_log("Un fante amazzone si trasforma in Pantera (dado %d)." % d)
+		eventi.append({"t": "trasforma", "u": u.id, "dado": d, "ok": true})
+	else:
+		_log("Un fante amazzone non riesce a trasformarsi (dado %d)." % d)
+		eventi.append({"t": "trasforma", "u": u.id, "dado": d, "ok": false})
+	return ""
+
+# --- Passaggi segreti (regola opzionale 1) --------------------------------------
+
+func puo_passaggio(u: ZPedina) -> String:
+	if not opzione("passaggi"):
+		return "Regola dei passaggi segreti non attiva."
+	if fase != FASE_MOVIMENTO or u.popolo != popolo_di_mano():
+		return "I passaggi segreti si usano nella fase di movimento."
+	if passaggio_usato:
+		return "Un solo trasferimento per mossa."
+	if u.citta < 0:
+		return "Si trasferisce un pezzo da una propria città a un'altra."
+	if u.mosso:
+		return "Ha già mosso."
+	return ""
+
+func _passaggio(u: ZPedina, cid: int, eventi: Array) -> String:
+	var e := puo_passaggio(u)
+	if e != "":
+		return e
+	var ci: Dictionary = citta[cid]
+	if ci.p != u.popolo or int(ci.id) == u.citta or ci.h[0] < 0:
+		return "Scegli un'altra città del tuo popolo."
+	if ci.g.size() >= ZRegole.MAX_GUARNIGIONE:
+		return "Quella città è piena."
+	var da := u.hex
+	_esci_da_citta(u)
+	u.hex = hex_citta(ci)
+	u.mosso = true
+	_entra_in_citta(u, ci)
+	passaggio_usato = true
+	_log("Un pezzo %s attraversa un passaggio segreto." % ZRegole.degli(u.popolo))
+	eventi.append({"t": "passaggio", "u": u.id, "da": [da.x, da.y], "a": ci.h.duplicate()})
+	return ""
+
+# --- Magia (regola opzionale 2) -----------------------------------------------------
+
+## Signori del popolo di mano in grado di fare magie.
+func signori_magici(p: String) -> Array[ZPedina]:
+	var out: Array[ZPedina] = []
+	for u in pedine:
+		if u.popolo == p and u.tipo == "signore" and u.viva and u.schierata and not u.scomparso and not u.ridotta and u.muta < turno_globale:
+			out.append(u)
+	return out
+
+func puo_fare_magia() -> bool:
+	return opzione("magia") and not magia_fatta and not signori_magici(popolo_di_mano()).is_empty()
+
+func entro_raggio_magia(p: String, h: Vector2i) -> bool:
+	for u in signori_magici(p):
+		if mappa.distanza(u.hex, h) <= ZRegole.RAGGIO_MAGIA:
+			return true
+	return false
+
+func _esagoni_entro(h: Vector2i, r: int) -> Array[Vector2i]:
+	var out: Array[Vector2i] = [h]
+	var dist := {h: 0}
+	var i := 0
+	while i < out.size():
+		var x := out[i]
+		i += 1
+		if dist[x] >= r:
+			continue
+		for v in mappa.vicino_geometrico_tutti(x):
+			if not dist.has(v):
+				dist[v] = dist[x] + 1
+				out.append(v)
+	return out
+
+## Verifica il bersaglio di una magia prima di tirare il dado.
+func valuta_magia(s: String, h: Vector2i, h2 = null) -> String:
+	if not ZRegole.MAGIE.has(s):
+		return "Magia sconosciuta."
+	if fase != FASE_MAGIA:
+		return "Le magie si fanno all'inizio della propria mossa."
+	if magia_fatta:
+		return "Una sola magia per mossa."
+	var p := popolo_di_mano()
+	if not entro_raggio_magia(p, h):
+		return "Il bersaglio deve essere entro 10 esagoni da un tuo Signore."
+	match s:
+		"frana":
+			if terreno(h) != ZMappa.T.MONTAGNA:
+				return "Scegli un esagono di montagna."
+		"ponte":
+			if h2 == null:
+				return "Scegli le due coste da collegare."
+			var b := Vector2i(int(h2[0]), int(h2[1]))
+			if not (mappa.terra(h) and mappa.terra(b) and mappa.costa(h) and mappa.costa(b)):
+				return "Il ponte unisce due esagoni di costa."
+			var d := mappa.distanza(h, b)
+			if d < 2 or d > 4:
+				return "Un ponte di pensiero attraversa al massimo 3 esagoni di mare."
+			if b in mappa.vicini_terra(h):
+				return "Quelle coste sono già collegate."
+		"rinascita":
+			var ci := citta_in(h)
+			if ci.is_empty() or ci.p != p:
+				return "Scegli una tua città."
+		"voragine":
+			var ci := citta_in(h)
+			if ci.is_empty() or not nemici(ci.p, p):
+				return "Scegli una città nemica."
+		"megadrago":
+			if not mappa.terra(h) or not pedine_in(h).is_empty() or not citta_in(h).is_empty():
+				return "Il mega drago compare in un esagono di terra libero."
+		"odalische":
+			var ok := false
+			for w in pedine_in(h):
+				if nemici(w.popolo, p) and w.tipo == "signore":
+					ok = true
+			if not ok:
+				return "Scegli un Signore nemico."
+	return ""
+
+func _magia(s: String, h: Vector2i, h2, punti: int, eventi: Array) -> String:
+	var e := valuta_magia(s, h, h2)
+	if e != "":
+		return e
+	var p := popolo_di_mano()
+	punti = clampi(punti, 0, int(preparazione.get(p, 0)))
+	preparazione[p] = int(preparazione.get(p, 0)) - punti
+	magia_fatta = true
+	var d := rng.randi_range(1, 6)
+	var tot := d + punti
+	var m: Dictionary = ZRegole.MAGIE[s]
+	var ok := tot >= int(m.min)
+	var extra := tot - int(m.min)
+	eventi.append({"t": "magia", "s": s, "h": [h.x, h.y], "dado": d, "punti": punti, "totale": tot, "ok": ok, "p": p})
+	if not ok:
+		_log("%s tentano %s: dado %d + %d = %d, serviva %d. La magia fallisce." % [ZRegole.Gli(p), m.nome, d, punti, tot, m.min])
+		return ""
+	_log("%s lanciano %s: dado %d + %d = %d (minimo %d)." % [ZRegole.Gli(p), m.nome, d, punti, tot, m.min])
+	match s:
+		"frana":
+			var varco: Array[Vector2i] = [h]
+			var i := 0
+			while i < varco.size() and varco.size() < 1 + extra:
+				for v in mappa.vicino_geometrico_tutti(varco[i]):
+					if terreno(v) == ZMappa.T.MONTAGNA and v not in varco and varco.size() < 1 + extra:
+						varco.append(v)
+				i += 1
+			for v in varco:
+				terreno_mod["%d,%d" % [v.x, v.y]] = ZMappa.T.PIANURA
+		"ponte":
+			ponti_temp.append([[h.x, h.y], [int(h2[0]), int(h2[1])]])
+			eventi.append({"t": "ponti"})
+		"coraggio":
+			var ridotte := pedine.filter(func(u): return u.popolo == p and u.viva and u.ridotta)
+			ridotte.sort_custom(func(a, b): return mappa.distanza(a.hex, h) < mappa.distanza(b.hex, h))
+			for u in ridotte.slice(0, 1 + extra):
+				u.ridotta = false
+				eventi.append({"t": "recupero", "u": u.id})
+		"spada":
+			for v in _esagoni_entro(h, extra):
+				for u in pedine_in(v):
+					if u.popolo == p:
+						u.spada = turno_globale
+		"rinascita":
+			var ci := citta_in(h)
+			var morti := pedine.filter(func(u): return u.popolo == p and u.tipo == "signore" and not u.viva)
+			for u in morti.slice(0, 1 + extra):
+				u.viva = true
+				u.ridotta = false
+				u.schierata = true
+				u.colpi = 0
+				u.paralisi = 0
+				u.hex = hex_citta(ci)
+				if ci.g.size() < ZRegole.MAX_GUARNIGIONE:
+					_entra_in_citta(u, ci)
+				else:
+					u.citta = -1
+					for v in mappa.vicini_terra(h):
+						if pedine_in(v).is_empty() and citta_in(v).is_empty():
+							u.hex = v
+							break
+				_log("Un Signore %s rinasce." % ZRegole.degli(p))
+		"odalische":
+			var lord := pedine.filter(func(u): return u.viva and u.tipo == "signore" and nemici(u.popolo, p) and u.in_campo())
+			lord.sort_custom(func(a, b): return mappa.distanza(a.hex, h) < mappa.distanza(b.hex, h))
+			for u in lord.slice(0, 1 + extra):
+				u.muta = turno_globale + popoli.size()
+		"megadrago":
+			var posti: Array[Vector2i] = [h]
+			for v in mappa.vicini_terra(h):
+				if pedine_in(v).is_empty() and citta_in(v).is_empty() and not in_zona_nemica(v, "__nessuno__"):
+					posti.append(v)
+			for i in mini(1 + extra, posti.size()):
+				var u := ZPedina.new()
+				u.id = pedine.size()
+				u.popolo = p
+				u.tipo = "megadrago"
+				u.hex = posti[i]
+				u.schierata = true
+				u.mosso = true
+				pedine.append(u)
+				eventi.append({"t": "evoca", "u": u.id})
+		"sonno":
+			for v in _esagoni_entro(h, extra):
+				for u in pedine_in(v):
+					if nemici(u.popolo, p) and u.tipo != "megadrago":
+						u.ridotta = true
+						eventi.append({"t": "ridotta", "u": u.id})
+		"terremoto":
+			for v in _esagoni_entro(h, extra):
+				for u in pedine_in(v):
+					if nemici(u.popolo, p):
+						_elimina(u, p, eventi)
+		"voragine":
+			var nemiche := citta.filter(func(c): return c.h[0] >= 0 and nemici(c.p, p))
+			nemiche.sort_custom(func(a, b): return mappa.distanza(hex_citta(a), h) < mappa.distanza(hex_citta(b), h))
+			for ci in nemiche.slice(0, 1 + extra):
+				for id in ci.g.duplicate():
+					_elimina(pedine[id], p, eventi)
+				var hc := hex_citta(ci)
+				var vecchio: String = ci.p
+				ci.h = [-1, -1]
+				ci.p = ""
+				if opzione("lampo"):
+					_punti_conquista(p, vecchio, 0.5)
+				else:
+					bonus_vittoria[p] = float(bonus_vittoria.get(p, 0.0)) + 0.5
+				_log("Una città %s sprofonda in una voragine di fiamme!" % ZRegole.degli(vecchio))
+				eventi.append({"t": "conquista", "c": ci.id, "p": p, "da": vecchio, "rasa": true, "h": [hc.x, hc.y]})
+	_sporca()
+	return ""
+
 # --- Avanzamento dei turni -----------------------------------------------------
 
 func _avanza_fase(eventi: Array) -> String:
@@ -1355,6 +1885,11 @@ func _avanza_fase(eventi: Array) -> String:
 		FASE_SCHIERAMENTO:
 			return _fine_schieramento(eventi)
 		FASE_ALLEANZE:
+			_entra_in_fase(FASE_MAGIA if opzione("magia") else FASE_SINGOLI, eventi)
+		FASE_MAGIA:
+			if not magia_fatta:
+				preparazione[popolo_di_mano()] = mini(ZRegole.MAX_PREPARAZIONE, int(preparazione.get(popolo_di_mano(), 0)) + 1)
+				_log("%s accumulano un punto di preparazione magica (%d)." % [ZRegole.Gli(popolo_di_mano()), preparazione[popolo_di_mano()]])
 			_entra_in_fase(FASE_SINGOLI, eventi)
 		FASE_SINGOLI:
 			_entra_in_fase(FASE_MOVIMENTO, eventi)
@@ -1370,10 +1905,17 @@ func _avanza_fase(eventi: Array) -> String:
 ## Entra in una fase; le fasi in cui non c'è nulla da fare vengono saltate.
 func _entra_in_fase(f: String, eventi: Array) -> void:
 	fase = f
+	if f == FASE_MAGIA and not puo_fare_magia():
+		if not magia_fatta:
+			preparazione[popolo_di_mano()] = mini(ZRegole.MAX_PREPARAZIONE, int(preparazione.get(popolo_di_mano(), 0)) + 1)
+		fase = FASE_SINGOLI
+		f = FASE_SINGOLI
 	if f == FASE_SINGOLI and not ha_azioni_singole():
 		fase = FASE_MOVIMENTO
 	if fase == FASE_LANCI and not ha_lanci():
 		fase = FASE_COMBATTIMENTO
+	if fase == FASE_COMBATTIMENTO and zl2():
+		_elimina_ridotte_adiacenti(eventi)
 	eventi.append({"t": "fase", "fase": fase})
 
 ## Qualche pezzo può fare un attacco singolo o fiammeggiare prima di muovere?
@@ -1385,6 +1927,9 @@ func ha_azioni_singole() -> bool:
 	for u in pedine:
 		if u.popolo != p or not u.in_campo():
 			continue
+		if u.popolo == "Amazzoni" and u.tipo == "donna" and puo_trasformare(u) == "":
+			ok = true
+			break
 		if ZRegole.attacco_singolo(u.popolo, u.tipo) and puo_attacco_singolo(u) == "":
 			for b in pedine:
 				if attaccabile(b) and nemici(b.popolo, p) and mappa.distanza(u.hex, b.hex) <= u.m() + 1:
@@ -1408,6 +1953,9 @@ func ha_lanci() -> bool:
 	fase = FASE_LANCI
 	var ok := false
 	for u in pedine:
+		if u.popolo == "Amazzoni" and u.tipo == "fante" and puo_trasformare(u) == "":
+			ok = true
+			break
 		if u.popolo != p or tipo_tiro(u) == "" or u.agito or not u.viva or u.scomparso:
 			continue
 		for b in pedine:
@@ -1439,9 +1987,12 @@ func _chiudi_movimento(eventi: Array) -> void:
 			u.mese_scomparsa = turno_globale
 			_sporca()
 			eventi.append({"t": "ricompare", "u": u.id, "da": [da.x, da.y], "a": [dove.x, dove.y]})
-	# Due pezzi rimasti sovrapposti senza scorta tornano a formare una coppia.
+	# Due pezzi rimasti sovrapposti senza scorta tornano a formare una coppia
+	# (solo nel gioco base: con Zargo's Lords 2 l'ammassamento è libero).
 	_sporca()
 	for u in pedine:
+		if zl2():
+			break
 		if u.popolo == p and u.in_campo() and u.tipo == "fante" and u.scorta < 0:
 			for w in pedine_in(u.hex):
 				if w != u and w.tipo != "fante" and w.scortato_da < 0 and w.popolo == p:
@@ -1449,20 +2000,86 @@ func _chiudi_movimento(eventi: Array) -> void:
 					w.scortato_da = u.id
 
 func _fine_turno(eventi: Array) -> void:
+	_chiudi_mossa(eventi)
 	turno += 1
 	if turno >= popoli.size():
 		turno = 0
-		if mese >= ZRegole.MESI:
+		if mese >= mesi_totali():
 			_termina(eventi)
 			return
 		mese += 1
 	_inizia_turno(eventi)
 
+## Fine della mossa del popolo di mano: recupero dei pezzi ridotti, reti,
+## mega draghi ed effetti magici che valgono "per questa mossa".
+func _chiudi_mossa(eventi: Array) -> void:
+	var p := popolo_di_mano()
+	if zl2():
+		for u in pedine:
+			if u.popolo != p or not u.viva or not u.ridotta:
+				continue
+			var signore_vicino := false
+			if u.tipo != "signore":
+				for v in [u.hex] + mappa.vicino_geometrico_tutti(u.hex):
+					for w in pedine_in(v):
+						if w.popolo == p and w.tipo == "signore" and w.attivo():
+							signore_vicino = true
+				if not signore_vicino:
+					continue
+			var d := rng.randi_range(1, 6)
+			if d >= 4:
+				u.ridotta = false
+				_log("%s %s si riprende (dado %d)." % [u.nome(), ZRegole.degli(p), d])
+				eventi.append({"t": "recupero", "u": u.id})
+			elif d == 1 or u.tipo == "signore":
+				_log("%s %s non si riprende (dado %d) ed è perduto." % [u.nome(), ZRegole.degli(p), d])
+				_elimina(u, "", eventi)
+	for u in pedine:
+		if u.tipo == "megadrago" and u.viva:
+			u.viva = false
+			eventi.append({"t": "elimina", "u": u.id})
+	if p == "Aracnidi" and not reti.is_empty():
+		reti.clear()
+		eventi.append({"t": "reti"})
+	terreno_mod.clear()
+	if not ponti_temp.is_empty():
+		ponti_temp.clear()
+		eventi.append({"t": "ponti"})
+	_sporca()
+
+## Zargo's Lords 2: chi termina adiacente a pezzi nemici ridotti li elimina
+## automaticamente nella propria fase di combattimento.
+func _elimina_ridotte_adiacenti(eventi: Array) -> void:
+	var p := popolo_di_mano()
+	for u in pedine:
+		if u.viva and u.ridotta and u.in_campo() and nemici(u.popolo, p):
+			for v in mappa.vicino_geometrico_tutti(u.hex):
+				var trovato := false
+				for w in pedine_in(v):
+					if w.popolo == p and w.attivo():
+						trovato = true
+				if trovato:
+					_log("%s %s, ridotto e circondato, viene eliminato." % [u.nome(), ZRegole.degli(u.popolo)])
+					_elimina(u, p, eventi)
+					break
+
 func _inizia_turno(eventi: Array) -> void:
 	turno_globale += 1
 	var p := popolo_di_mano()
+	magia_fatta = false
+	passaggio_usato = false
+	trasformazioni = 0
+	# All'inizio della mossa amazzone tutte le Pantere tornano umane.
+	if p == "Amazzoni":
+		for u in pedine:
+			if u.popolo == p and u.pantera() and u.origine != "":
+				u.tipo = u.origine
+				u.origine = ""
+				u.trasformata = turno_globale + 1
+				if u.viva:
+					eventi.append({"t": "trasforma", "u": u.id})
 	# Un popolo senza più pezzi né città salta la sua mossa.
-	if pedine_di(p).is_empty() and citta_di(p) == 0:
+	if pedine_di(p).filter(func(u): return u.tipo != "megadrago").is_empty() and citta_di(p) == 0:
 		_log("%s sono scomparsi da Zargo." % ZRegole.Gli(p))
 		_fine_turno(eventi)
 		return
@@ -1492,18 +2109,39 @@ func _inizia_turno(eventi: Array) -> void:
 	eventi.append({"t": "turno", "p": p, "mese": mese})
 	_sporca()
 
+## Punteggio finale: città controllate (più metà per ogni città sprofondata),
+## oppure punti della Guerra lampo.
+func punteggio(p: String) -> float:
+	if opzione("lampo"):
+		var pp: float = float(punti_lampo.get(p, 0))
+		var diversi := {}
+		for x in conquiste_lampo.get(p, []):
+			diversi[x] = true
+		if diversi.size() >= 2:
+			pp *= diversi.size()
+		var persi := 0
+		for u in pedine:
+			if u.popolo == p and u.tipo == "signore" and not u.viva:
+				persi += 1
+		pp -= mini(30, persi * 5)
+		return pp
+	return float(citta_di(p)) + float(bonus_vittoria.get(p, 0.0))
+
+static func numero(x: float) -> String:
+	return str(int(x)) if is_equal_approx(x, roundf(x)) else "%.1f" % x
+
 func _termina(eventi: Array) -> void:
 	fase = FASE_FINITA
-	var migliore := -1
+	var migliore := -INF
 	vincitori.clear()
 	for p in popoli:
-		var n := citta_di(p)
+		var n := punteggio(p)
 		if n > migliore:
 			migliore = n
 			vincitori = [p]
 		elif n == migliore:
 			vincitori.append(p)
-	_log("L'Anno di Zargo è finito. %s con %d città." % [" e ".join(vincitori), migliore])
+	_log("%s %s con %s %s." % ["La Guerra lampo è finita." if opzione("lampo") else "L'Anno di Zargo è finito.", " e ".join(vincitori), ZPartita.numero(migliore), "punti" if opzione("lampo") else "città"])
 	eventi.append({"t": "fine", "vincitori": vincitori})
 
 func _controlla_vittoria(eventi: Array) -> void:
@@ -1511,7 +2149,7 @@ func _controlla_vittoria(eventi: Array) -> void:
 		return
 	var vivi: Array[String] = []
 	for p in popoli:
-		if citta_di(p) > 0 or not pedine_di(p).is_empty():
+		if citta_di(p) > 0 or not pedine_di(p).filter(func(u): return u.tipo != "megadrago").is_empty():
 			vivi.append(p)
 	# Vittoria anticipata: su Zargo è rimasto un solo popolo.
 	if vivi.size() <= 1:
@@ -1533,6 +2171,9 @@ func a_dict() -> Dictionary:
 		"mese": mese, "turno": turno, "tg": turno_globale, "fase": fase, "alleanze": alleanze,
 		"proposte": proposte, "sa": singoli_aperti, "mi": mischia_iniziata, "registro": registro.slice(maxi(0, registro.size() - 60)),
 		"vincitori": vincitori, "seme": str(rng.seed), "stato": str(rng.state),
+		"opz": opzioni, "prep": preparazione, "mf": magia_fatta, "tm": terreno_mod, "pt": ponti_temp,
+		"reti": reti, "pu": passaggio_usato, "tra": trasformazioni, "bv": bonus_vittoria,
+		"cl": conquiste_lampo, "pl": punti_lampo, "nc": n_conquiste,
 	}
 
 func da_dict(d: Dictionary) -> void:
@@ -1559,6 +2200,27 @@ func da_dict(d: Dictionary) -> void:
 	mischia_iniziata = bool(d.mi)
 	registro.assign(d.get("registro", []))
 	vincitori.assign(d.get("vincitori", []))
+	opzioni = d.get("opz", {}).duplicate()
+	preparazione = {}
+	for k in d.get("prep", {}):
+		preparazione[k] = int(d.prep[k])
+	magia_fatta = bool(d.get("mf", false))
+	terreno_mod = {}
+	for k in d.get("tm", {}):
+		terreno_mod[k] = int(d.tm[k])
+	ponti_temp = d.get("pt", []).duplicate(true)
+	reti = d.get("reti", []).duplicate(true)
+	passaggio_usato = bool(d.get("pu", false))
+	trasformazioni = int(d.get("tra", 0))
+	bonus_vittoria = d.get("bv", {}).duplicate()
+	conquiste_lampo = {}
+	for k in d.get("cl", {}):
+		conquiste_lampo[k] = Array(d.cl[k])
+	for p2 in popoli:
+		if not conquiste_lampo.has(p2):
+			conquiste_lampo[p2] = []
+	punti_lampo = d.get("pl", {}).duplicate()
+	n_conquiste = int(d.get("nc", 0))
 	rng.seed = int(String(d.seme))
 	rng.state = int(String(d.stato))
 	_sporca()

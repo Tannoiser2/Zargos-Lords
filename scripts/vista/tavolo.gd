@@ -282,6 +282,13 @@ func _posizione_pedina(g: ZPartita, u: ZPedina) -> Vector3:
 	if u.scorta >= 0:
 		p.y += ZSegnalino.SPESSORE   # il fante di scorta sta sopra, un po' spostato
 		p += Vector3(0.028, 0, 0.028)
+	elif u.scortato_da < 0 and not u.scomparso:
+		# Zargo's Lords 2: due pezzi nello stesso esagono, impilati e sfalsati.
+		var pila := g.pedine_in(u.hex).filter(func(w): return w.scorta < 0 and w.scortato_da < 0 and not w.scomparso)
+		var i := pila.find(u)
+		if i > 0:
+			p.y += ZSegnalino.SPESSORE * i
+			p += Vector3(0.035, 0, 0.035) * i
 	if u.scomparso and not g.pedine_in(u.hex).is_empty():
 		# Segnalino di sparizione sotto un pezzo arrivato dopo: lo si sposta di lato.
 		p += Vector3(-0.07, -0.002, -0.05)
@@ -312,10 +319,23 @@ func sincronizza(g: ZPartita, durata := 0.25) -> void:
 			s.faccia("scomparso")
 			s.scale = Vector3.ONE * 0.75
 			s.testo("")
+		elif u.ridotta:
+			# Pezzo ridotto: girato a faccia in giù, come sul tavolo.
+			s.faccia("retro")
+			s.scale = Vector3.ONE
+			s.testo("")
 		else:
 			s.faccia(u.tipo)
 			s.scale = Vector3.ONE
 			s.testo(str(u.paralisi) if u.paralisi > 0 else "", Color(0.95, 0.6, 1.0))
+		if u.spada >= g.turno_globale:
+			s.alone(Color(1.0, 0.95, 0.6))
+		elif u.catturata or (g.zl2() and g.ha_rete(u.hex) and u.popolo != "Aracnidi"):
+			s.alone(Color(0.85, 0.85, 0.8, 0.9))
+		elif u.muta >= g.turno_globale:
+			s.alone(Color(0.75, 0.3, 0.6))
+		else:
+			s.alone(Color(0, 0, 0, 0))
 	for id in segnalini.keys():
 		if not visti.has(id):
 			var s: ZSegnalino = segnalini[id]
@@ -324,6 +344,7 @@ func sincronizza(g: ZPartita, durata := 0.25) -> void:
 				s.queue_free()   # entrato in città: sparisce senza effetti
 			else:
 				s.elimina_animato()
+	_aggiorna_segni(g)
 	for ci in g.citta:
 		if ci.h[0] < 0:
 			if citta.has(ci.id):
@@ -342,6 +363,39 @@ func sincronizza(g: ZPartita, durata := 0.25) -> void:
 			s.vai_a(pos, durata)
 			s.cambia_popolo(ci.p)
 		s.testo("" if ci.g.is_empty() else str(ci.g.size()), ZTema.AVORIO)
+
+## Segni sul tavolo di Zargo's Lords 2: reti dei ragni, ponti di pensiero,
+## varchi della Grande frana.
+var _segni: Node3D
+func _aggiorna_segni(g: ZPartita) -> void:
+	if _segni:
+		_segni.queue_free()
+	_segni = Node3D.new()
+	add_child(_segni)
+	var tex_rete: Texture2D = load("res://assets/units/aracnidi/rete.png")
+	for r in g.reti:
+		var sp := Sprite3D.new()
+		sp.texture = tex_rete
+		sp.pixel_size = (mappa.raggio_px / SCALA * 1.5) / tex_rete.get_width()
+		sp.axis = Vector3.AXIS_Y
+		sp.rotation.y = deg_to_rad(30)
+		sp.modulate = Color(1, 1, 1, 0.8)
+		sp.position = mondo(Vector2i(int(r[0]), int(r[1]))) + Vector3(0, 0.006, 0)
+		_segni.add_child(sp)
+	for pt in g.ponti_temp:
+		var a := mondo(Vector2i(int(pt[0][0]), int(pt[0][1])))
+		var b := mondo(Vector2i(int(pt[1][0]), int(pt[1][1])))
+		var f := _freccia(a, b, Color(0.7, 0.9, 1.0, 0.85))
+		_segni.add_child(f)
+		var f2 := _freccia(b, a, Color(0.7, 0.9, 1.0, 0.85))
+		_segni.add_child(f2)
+	var varchi: Array = []
+	for k in g.terreno_mod:
+		var xy: PackedStringArray = String(k).split(",")
+		varchi.append(Vector2i(int(xy[0]), int(xy[1])))
+	if not _overlay.has("varchi"):
+		_crea_overlay("varchi")
+	evidenzia("varchi", varchi, Color(0.85, 0.65, 0.35, 0.45))
 
 func segnalino(id: int) -> ZSegnalino:
 	return segnalini.get(id)

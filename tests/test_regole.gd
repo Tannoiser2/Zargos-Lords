@@ -25,6 +25,18 @@ func partita_vuota() -> ZPartita:
 	g._sporca()
 	return g
 
+func partita_zl2(opz := {}) -> ZPartita:
+	var g := ZPartita.new()
+	g.nuova(["Amazzoni", "Aracnidi"], {"Amazzoni": "umano", "Aracnidi": "umano"}, 7, opz)
+	for u in g.pedine:
+		u.schierata = false
+		u.hex = Vector2i(-1, -1)
+	g.fase = ZPartita.FASE_MOVIMENTO
+	g.turno = 0
+	g.turno_globale = 1
+	g._sporca()
+	return g
+
 func metti(g: ZPartita, popolo: String, tipo: String, h: Vector2i) -> ZPedina:
 	for u in g.pedine:
 		if u.popolo == popolo and u.tipo == tipo and not u.schierata:
@@ -295,6 +307,33 @@ func _init() -> void:
 	g.esegui({"a": "ricompari", "u": mon.id, "h": [d0.x, d0.y]})
 	controlla(not g.esegui({"a": "scompari", "u": mon.id}).ok, "chi ricompare non può sparire di nuovo nella stessa mossa")
 
+	print("Zargo's Lords 2")
+	g = partita_zl2({"magia": true})
+	controlla(g.zl2() and g.citta.filter(func(c): return c.p == "Amazzoni").size() == 6, "con i nuovi popoli valgono le regole di ZL2, sei città a testa")
+	p = pianura_aperta(g)
+	var a1 := metti(g, "Amazzoni", "fante", p)
+	var a2 := metti(g, "Amazzoni", "fante", g.mappa.linea(p, 0, 1)[0])
+	var r1 := g.esegui({"a": "muovi", "u": a2.id, "h": [p.x, p.y]})
+	controlla(r1.ok and a2.hex == p, "due pezzi dello stesso popolo si impilano")
+	var a3 := metti(g, "Amazzoni", "fante", g.mappa.linea(p, 3, 1)[0])
+	controlla(not g.esegui({"a": "muovi", "u": a3.id, "h": [p.x, p.y]}).ok, "un terzo pezzo nella pila è vietato")
+	var ragno_r := metti(g, "Aracnidi", "fante", g.mappa.linea(p, 1, 2)[1])
+	ragno_r.ridotta = true
+	controlla(not g.in_zona_nemica(g.mappa.linea(p, 1, 1)[0], "Amazzoni"), "un pezzo ridotto non ha zona d'influenza")
+	g.fase = ZPartita.FASE_SINGOLI
+	var donna := metti(g, "Amazzoni", "donna", g.mappa.linea(p, 4, 2)[1])
+	g.esegui({"a": "trasforma", "u": donna.id})
+	controlla(donna.tipo == "pantera" and donna.origine == "donna", "la Donna-Pantera si trasforma in Pantera (12/10)")
+	g.fase = ZPartita.FASE_MAGIA
+	g.magia_fatta = false
+	var sig := metti(g, "Amazzoni", "signore", g.mappa.linea(p, 5, 3)[2])
+	var nem := metti(g, "Aracnidi", "signore", g.mappa.linea(p, 2, 4)[3])
+	controlla(g.valuta_magia("frana", sig.hex) != "", "la Grande frana vale solo in montagna")
+	g.preparazione["Amazzoni"] = 2
+	g.esegui({"a": "magia", "s": "odalische", "h": [nem.hex.x, nem.hex.y], "punti": 2})
+	controlla(nem.muta > g.turno_globale and int(g.preparazione["Amazzoni"]) == 0, "le Odalische infami (3+) con 2 punti riescono sempre")
+	controlla(not g.esegui({"a": "magia", "s": "sonno", "h": [nem.hex.x, nem.hex.y]}).ok, "una sola magia per mossa")
+
 	print("Partita automatica e salvataggio")
 	g = ZPartita.new()
 	g.nuova(["Draghi", "Alati"], {"Draghi": "ia", "Alati": "ia"}, 99)
@@ -314,6 +353,16 @@ func _init() -> void:
 				print("    differisce: ", k)
 	controlla(ja == jb, "lo stato sopravvive alla serializzazione JSON")
 	controlla(g.mese >= 2, "le IA giocano più mesi (mese %d)" % g.mese)
+	g = ZPartita.new()
+	g.nuova(["Amazzoni", "Aracnidi", "Cavalieri"], {"Amazzoni": "ia", "Aracnidi": "ia", "Cavalieri": "ia"}, 5, {"magia": true, "passaggi": true})
+	ia = ZIA.new()
+	for i in 600:
+		var az := ia.prossima_azione(g)
+		if not g.esegui(az).ok:
+			ia.scarta(az)
+	copia = ZPartita.new()
+	copia.da_dict(JSON.parse_string(JSON.stringify(g.a_dict())))
+	controlla(JSON.stringify(copia.a_dict()) == JSON.stringify(g.a_dict()), "anche lo stato di Zargo's Lords 2 sopravvive alla serializzazione")
 
 	print("Errori: %d" % errori)
 	quit(1 if errori > 0 else 0)

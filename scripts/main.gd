@@ -23,6 +23,10 @@ var gruppo: Array[int] = [] # attaccanti scelti nella fase di combattimento
 var difensori: Array[int] = []
 var citta_bersaglio := -1
 var ia_in_corso := false
+var magia_scelta := ""      # incantesimo scelto nella fase della magia
+var magia_punti := 0        # punti di preparazione da spendere
+var magia_h1 := Vector2i(-1, -1)   # prima costa del Ponte di pensiero
+var passaggio_id := -1      # pezzo in guarnigione che cerca un passaggio segreto
 var _ultimo_turno_visto := -1
 
 func _ready() -> void:
@@ -63,10 +67,10 @@ func _apri_menu() -> void:
 	menu.entra_stanza.connect(_entra_stanza)
 	hud.radice.visible = false
 
-func _nuova_partita(controllo: Dictionary) -> void:
+func _nuova_partita(controllo: Dictionary, opzioni := {}) -> void:
 	in_online = false
 	partita = ZPartita.new()
-	partita.nuova(controllo.keys(), controllo)
+	partita.nuova(controllo.keys(), controllo, 0, opzioni)
 	_avvia_vista()
 
 func _carica() -> void:
@@ -338,14 +342,41 @@ func _effetto(e: Dictionary) -> void:
 			if e.tipo == "visione":
 				hud.mostra_dado(int(e.dado), "VISIONE: FUGA DI %d" % e.fuga if e.fuga > 0 else "VISIONE SENZA EFFETTO", "%s su %s a %d esagoni." % [u.nome(), b.nome(), e.distanza])
 			else:
-				var nome := "FRECCE" if e.tipo == "frecce" else "VAMPE"
+				var nome: String = {"frecce": "FRECCE", "cavallo": "FRECCE", "dardi": "DARDI"}.get(e.tipo, "VAMPE")
 				var titolo := ("%s: BERSAGLIO ELIMINATO" % nome) if e.eliminato else ("%d %s A SEGNO" % [e.colpi, nome])
 				hud.mostra_dado(int(e.dado), titolo, "%s su %s a %d esagoni: %d su %d necessarie." % [u.nome(), b.nome(), e.distanza, e.totale, e.servono])
 		"conquista":
-			var h := partita.hex_citta(partita.citta[int(e.c)])
+			var h := Vector2i(int(e.h[0]), int(e.h[1])) if e.has("h") else partita.hex_citta(partita.citta[int(e.c)])
 			tavolo.lampo(h, ZTema.OCRA)
-			if not ia_in_corso or true:
+			if e.get("rasa", false):
+				hud.mostra_dado(0, "CITTÀ RASA AL SUOLO", "%s distruggono una città %s." % [ZRegole.Gli(e.p), ZRegole.degli(e.da)])
+			else:
 				hud.mostra_dado(0, "CITTÀ CONQUISTATA", "%s strappano una città %s." % [ZRegole.Gli(e.p), ZRegole.degli(e.da)])
+		"magia":
+			var m: Dictionary = ZRegole.MAGIE[e.s]
+			tavolo.lampo(Vector2i(int(e.h[0]), int(e.h[1])), Color(0.7, 0.5, 1.0) if m.scuola == "nera" else Color(1, 1, 0.8))
+			hud.mostra_dado(int(e.dado), ("%s RIUSCITA" if e.ok else "%s FALLITA") % String(m.nome).to_upper(), "%s: dado %d + %d punti di preparazione = %d (serve %d)." % [ZRegole.Gli(e.p), e.dado, e.punti, e.totale, m.min])
+		"trasforma":
+			var w := partita.pedine[int(e.u)]
+			tavolo.lampo(w.hex, Color(0.95, 0.6, 0.2))
+			if e.has("dado"):
+				hud.mostra_dado(int(e.dado), "TRASFORMAZIONE RIUSCITA" if e.ok else "TRASFORMAZIONE FALLITA", "Il fante amazzone diventa Pantera con un numero pari." if e.ok else "Serviva un numero pari.")
+		"rete":
+			var w := partita.pedine[int(e.u)]
+			tavolo.lampo(w.hex, Color(0.9, 0.9, 0.85))
+			var esiti := {"": "LA RETE MANCA IL BERSAGLIO", "C": "NEMICO CATTURATO NELLA RETE", "E": "NEMICO STRANGOLATO NELLA RETE"}
+			hud.mostra_dado(int(e.dado), esiti.get(e.esito, "RETE"), "Il Reziario lancia la rete prima dello scontro: 4-5 cattura (se deve arretrare è eliminato), 6 elimina.")
+		"ridotta":
+			tavolo.lampo(partita.pedine[int(e.u)].hex, Color(0.6, 0.6, 0.6))
+		"recupero":
+			tavolo.lampo(partita.pedine[int(e.u)].hex, Color(0.5, 1.0, 0.5))
+		"evoca":
+			tavolo.lampo(partita.pedine[int(e.u)].hex, Color(1.0, 0.3, 0.1))
+			tavolo.sincronizza(partita)
+		"passaggio":
+			tavolo.lampo(Vector2i(int(e.a[0]), int(e.a[1])), Color(0.85, 0.75, 0.5))
+		"reti", "ponti":
+			tavolo.sincronizza(partita)
 		"assedio_respinto":
 			hud.mostra_dado(0, "GUARNIGIONE DI %d PEZZI" % e.n, "Per attaccare la città servono almeno altrettanti assedianti.")
 		"gorgo":
@@ -408,20 +439,25 @@ func _deseleziona(aggiorna := true) -> void:
 	gruppo.clear()
 	difensori.clear()
 	citta_bersaglio = -1
+	magia_h1 = Vector2i(-1, -1)
+	magia_scelta = ""
+	passaggio_id = -1
 	if aggiorna and partita:
 		_aggiorna()
 
 func _sopra(h: Vector2i) -> void:
 	if partita == null or h.x < 0:
 		return
-	var t: String = ZMappa.NOMI_TERRENO[partita.mappa.terreno(h)]
+	var t: String = ZMappa.NOMI_TERRENO[partita.terreno(h)]
 	var u := partita.pedina_in(h)
 	var info: String = t
 	var bonus := partita.bonus_terreno_hex(h)
 	if bonus > 0:
 		info += " (+%d in difesa)" % bonus
-	if partita.mappa.terreno(h) == ZMappa.T.BOSCO:
+	if partita.terreno(h) == ZMappa.T.BOSCO:
 		info += " · costa 2 punti"
+	if partita.ha_rete(h):
+		info += " · rete di ragno"
 	var ci := partita.citta_in(h)
 	if not ci.is_empty():
 		info += " · città %s, guarnigione di %d pezzi" % [ZRegole.degli(ci.p), ci.g.size()]
@@ -451,6 +487,8 @@ func _clic(h: Vector2i, shift: bool) -> void:
 			sel_id = u.id if u else -1
 			citta_sel = int(ci.id) if not ci.is_empty() and u == null else -1
 			_aggiorna()
+		ZPartita.FASE_MAGIA:
+			_clic_magia(h, u, ci)
 		ZPartita.FASE_SINGOLI, ZPartita.FASE_MOVIMENTO:
 			_clic_movimento(h, u, ci, shift)
 		ZPartita.FASE_LANCI:
@@ -520,8 +558,48 @@ func _prossima_citta_da_piazzare() -> int:
 			return int(ci.id)
 	return -1
 
+## Fase della magia: dopo aver scelto l'incantesimo si clicca il bersaglio
+## (due coste per il Ponte di pensiero).
+func _clic_magia(h: Vector2i, u: ZPedina, ci: Dictionary) -> void:
+	if magia_scelta == "" or partita.magia_fatta:
+		sel_id = u.id if u else -1
+		citta_sel = int(ci.id) if not ci.is_empty() and u == null else -1
+		_aggiorna()
+		return
+	if magia_scelta == "ponte" and magia_h1.x < 0:
+		if partita.mappa.terra(h) and partita.mappa.costa(h) and partita.entro_raggio_magia(partita.popolo_di_mano(), h):
+			magia_h1 = h
+			_aggiorna()
+		else:
+			_avviso("Scegli una costa entro 10 esagoni da un tuo Signore.")
+		return
+	var az := {"a": "magia", "s": magia_scelta, "h": [h.x, h.y], "punti": magia_punti}
+	if magia_scelta == "ponte":
+		az = {"a": "magia", "s": "ponte", "h": [magia_h1.x, magia_h1.y], "h2": [h.x, h.y], "punti": magia_punti}
+	var e := partita.valuta_magia(String(az.s), Vector2i(int(az.h[0]), int(az.h[1])), az.get("h2", null))
+	if e != "":
+		_avviso(e)
+		if magia_scelta == "ponte":
+			magia_h1 = Vector2i(-1, -1)
+			_aggiorna()
+		return
+	_applica(az)
+	magia_scelta = ""
+	magia_punti = 0
+	magia_h1 = Vector2i(-1, -1)
+	_aggiorna()
+
 func _clic_movimento(h: Vector2i, u: ZPedina, ci: Dictionary, shift := false) -> void:
 	var p := partita.popolo_di_mano()
+	if passaggio_id >= 0:
+		var w := partita.pedine[passaggio_id]
+		passaggio_id = -1
+		if not ci.is_empty() and ci.p == p and int(ci.id) != w.citta:
+			_applica({"a": "passaggio", "u": w.id, "c": int(ci.id)})
+			sel_id = -1
+			citta_sel = int(ci.id)
+		_aggiorna()
+		return
 	var s: ZPedina = partita.pedine[sel_id] if sel_id >= 0 else null
 	if s and s.popolo == p:
 		# Monaco scomparso: ricompare nell'esagono scelto.
@@ -696,11 +774,15 @@ func _aggiorna() -> void:
 			hud.lbl_fase.text = ""
 		_:
 			hud.lbl_turno.text = "MOSSA %s" % ZRegole.degli(p).to_upper()
-			var fasi := {"alleanze": "1 · ALLEANZE", "singoli": "2 · ATTACCHI SINGOLI", "movimento": "3 · MOVIMENTO", "lanci": "4 · LANCI", "combattimento": "5 · CORPO A CORPO"}
-			hud.lbl_fase.text = "%s · %s" % [fasi.get(partita.fase, ""), chi.to_upper()]
+			var nomi := {"alleanze": "ALLEANZE", "magia": "MAGIA", "singoli": "ATTACCHI SINGOLI", "movimento": "MOVIMENTO", "lanci": "LANCI", "combattimento": "CORPO A CORPO"}
+			var ordine := ["alleanze", "magia", "singoli", "movimento", "lanci", "combattimento"]
+			if not partita.opzione("magia"):
+				ordine.erase("magia")
+			hud.lbl_fase.text = "%d · %s · %s" % [ordine.find(partita.fase) + 1, nomi.get(partita.fase, ""), chi.to_upper()]
 	match partita.fase:
 		ZPartita.FASE_SCHIERAMENTO: hud.btn_fase.text = "CONFERMA SCHIERAMENTO"
 		ZPartita.FASE_ALLEANZE: hud.btn_fase.text = "AVANTI  ›"
+		ZPartita.FASE_MAGIA: hud.btn_fase.text = "AGLI ATTACCHI SINGOLI  ›"
 		ZPartita.FASE_SINGOLI: hud.btn_fase.text = "AL MOVIMENTO  ›"
 		ZPartita.FASE_MOVIMENTO: hud.btn_fase.text = "AI LANCI  ›"
 		ZPartita.FASE_LANCI: hud.btn_fase.text = "AL CORPO A CORPO  ›"
@@ -740,13 +822,18 @@ func _aggiorna_popoli() -> void:
 				alleati.append(q.left(3))
 		if not alleati.is_empty():
 			riga.add_child(ZTema.etichetta("alleati: " + ", ".join(alleati), 12, ZTema.VERDE, ZTema.testo_forte))
-		riga.add_child(ZTema.etichetta("%d città · %d pezzi" % [partita.citta_di(p), partita.pedine_di(p).size()], 13, ZTema.INCHIOSTRO, ZTema.testo_forte if attivo else ZTema.testo))
+		if partita.opzione("magia"):
+			riga.add_child(ZTema.etichetta("magia %d" % int(partita.preparazione.get(p, 0)), 13, Color("6a3fa0"), ZTema.testo_forte))
+		var testo_p := "%d città · %d pezzi" % [partita.citta_di(p), partita.pedine_di(p).size()]
+		if partita.opzione("lampo"):
+			testo_p = "%s punti · %d città" % [ZPartita.numero(partita.punteggio(p)), partita.citta_di(p)]
+		riga.add_child(ZTema.etichetta(testo_p, 13, ZTema.INCHIOSTRO, ZTema.testo_forte if attivo else ZTema.testo))
 		hud.box_popoli.add_child(riga)
 
 func _scheda_pedina(u: ZPedina) -> Control:
 	var h := HBoxContainer.new()
 	var img := TextureRect.new()
-	img.texture = ZTema.texture_pedina(u.popolo, u.tipo)
+	img.texture = load(ZSegnalino.percorso_faccia(u.popolo, u.tipo))
 	img.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	img.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	img.custom_minimum_size = Vector2(84, 84)
@@ -755,7 +842,7 @@ func _scheda_pedina(u: ZPedina) -> Control:
 	v.add_theme_constant_override("separation", 2)
 	v.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	v.add_child(ZTema.titoletto(u.nome(), 20, ZRegole.COLORI[u.popolo].darkened(0.5)))
-	var valori := ZTema.etichetta("%s · combattimento %d · movimento %d" % [u.popolo, u.c(), u.m()], 13, ZTema.INCHIOSTRO, ZTema.testo_forte)
+	var valori := ZTema.etichetta("%s · combattimento %d · movimento %d" % [u.popolo, partita.valore(u), u.m()], 13, ZTema.INCHIOSTRO, ZTema.testo_forte)
 	valori.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	v.add_child(valori)
 	var d: String = ZRegole.DESCRIZIONI.get("%s/%s" % [u.popolo, u.tipo], "")
@@ -772,7 +859,7 @@ func _scheda_pedina(u: ZPedina) -> Control:
 			for b in partita.pedine:
 				if partita.attaccabile(b) and partita.nemici(b.popolo, u.popolo) and partita.mappa.distanza(u.hex, b.hex) <= partita.gittata(u) and partita.valuta_tiro(u, b).ok:
 					n += 1
-			guida = ("Bersagli a tiro: %d (in arancione). Clicca un nemico per %s." % [n, {"frecce": "tirare", "fiamme": "lanciare le fiamme", "visione": "lanciare la visione"}[tipo_t]]) if n > 0 else "Nessun bersaglio valido a tiro da qui (gittata %d%s)." % [partita.gittata(u), ", in linea retta e senza ostacoli" if tipo_t == "frecce" else ""]
+			guida = ("Bersagli a tiro: %d (in arancione). Clicca un nemico per %s." % [n, {"frecce": "tirare", "cavallo": "tirare", "dardi": "lanciare i dardi", "fiamme": "lanciare le fiamme", "visione": "lanciare la visione"}.get(tipo_t, "tirare")]) if n > 0 else "Nessun bersaglio valido a tiro da qui (gittata %d%s)." % [partita.gittata(u), ", in linea retta e senza ostacoli" if tipo_t == "frecce" and not partita.zl2() else ""]
 		elif partita.fase == ZPartita.FASE_MOVIMENTO:
 			guida = "Lancerà nella fase dei lanci, subito dopo il movimento."
 		if guida != "":
@@ -790,6 +877,16 @@ func _scheda_pedina(u: ZPedina) -> Control:
 		stato.append("paralizzato nel gorgo (%d)" % u.paralisi)
 	if u.scomparso:
 		stato.append("scomparso")
+	if u.ridotta:
+		stato.append("ridotto: fermo, senza zona d'influenza, si recupera a fine mossa")
+	if u.catturata:
+		stato.append("preso nella rete")
+	if u.spada >= partita.turno_globale:
+		stato.append("Spada di luce: valore doppio")
+	if u.muta >= partita.turno_globale:
+		stato.append("stregato dalle Odalische: niente magie")
+	if u.pantera() and u.origine != "":
+		stato.append("trasformata (tornerà %s)" % ("Donna-Pantera" if u.origine == "donna" else "fante"))
 	if u.popolo == partita.popolo_di_mano() and partita.fase in [ZPartita.FASE_SINGOLI, ZPartita.FASE_MOVIMENTO, ZPartita.FASE_LANCI, ZPartita.FASE_COMBATTIMENTO]:
 		if u.mosso:
 			stato.append("ha mosso")
@@ -836,6 +933,11 @@ func _aggiorna_selezione() -> void:
 				riga.add_child(ZTema.pulsante("Proponi alleanza", func(): _applica({"a": "proponi", "a2": q}), 13))
 			box.add_child(riga)
 		box.add_child(HSeparator.new())
+	if partita.fase == ZPartita.FASE_MAGIA and mio:
+		_pannello_magia(box)
+		if sel_id < 0 and citta_sel < 0:
+			return
+		box.add_child(HSeparator.new())
 	# Anteprima dello scontro.
 	if partita.fase == ZPartita.FASE_COMBATTIMENTO and mio and (not difensori.is_empty() or citta_bersaglio >= 0):
 		_pannello_scontro(box)
@@ -856,8 +958,19 @@ func _aggiorna_selezione() -> void:
 					azioni.add_child(ZTema.pulsante("Scompari", func(): _applica({"a": "scompari", "u": u.id}); sel_id = -1; _aggiorna(), 14))
 				if (u.scorta >= 0 or u.scortato_da >= 0) and not u.scorta_cambiata:
 					azioni.add_child(ZTema.pulsante("Togli la scorta", func(): _applica({"a": "togli_scorta", "u": u.id}), 14))
+			if partita.zl2() and u.popolo == "Amazzoni" and partita.puo_trasformare(u) == "":
+				if u.tipo == "donna":
+					azioni.add_child(ZTema.pulsante("Trasformati in Pantera", func(): _applica({"a": "trasforma", "u": u.id}), 14))
+				else:
+					azioni.add_child(ZTema.pulsante("Tenta la trasformazione (pari)", func(): _applica({"a": "trasforma", "u": u.id}), 14))
+			if partita.fase == ZPartita.FASE_MOVIMENTO and u.citta >= 0 and partita.puo_passaggio(u) == "":
+				azioni.add_child(ZTema.pulsante("Passaggio segreto", func(): passaggio_id = u.id; _aggiorna(), 14))
 			if azioni.get_child_count() > 0:
 				box.add_child(azioni)
+			if passaggio_id == u.id:
+				var lp := ZTema.etichetta("Clicca un'altra tua città (in giallo) per trasferirvi il pezzo.", 13, ZTema.VERDE.darkened(0.3), ZTema.testo_forte)
+				lp.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+				box.add_child(lp)
 		if u.scorta >= 0:
 			box.add_child(ZTema.etichetta("Scorta:", 12, ZTema.CUOIO, ZTema.testo_forte))
 			box.add_child(_scheda_pedina(partita.pedine[u.scorta]))
@@ -887,6 +1000,52 @@ func _aggiorna_selezione() -> void:
 		t.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		box.add_child(t)
 		box.add_child(ZTema.pulsante("Schieramento automatico", func(): _applica({"a": "auto_schieramento"}), 15))
+
+## Fase della magia: punti di preparazione, scelta dell'incantesimo e dei punti da spendere.
+func _pannello_magia(box: VBoxContainer) -> void:
+	var p := partita.popolo_di_mano()
+	var prep := int(partita.preparazione.get(p, 0))
+	box.add_child(ZTema.titoletto("Magia", 18))
+	if partita.magia_fatta:
+		box.add_child(ZTema.etichetta("Hai già fatto la tua magia in questa mossa.", 13, ZTema.CUOIO))
+		return
+	var info := ZTema.etichetta("Preparazione: %d punti (si accumula un punto per mossa senza magie, massimo %d). Il dado più i punti spesi deve raggiungere il minimo dell'incantesimo; il bersaglio dev'essere entro %d esagoni da un tuo Signore." % [prep, ZRegole.MAX_PREPARAZIONE, ZRegole.RAGGIO_MAGIA], 13)
+	info.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	box.add_child(info)
+	magia_punti = clampi(magia_punti, 0, prep)
+	var rp := HBoxContainer.new()
+	rp.add_child(ZTema.etichetta("Punti da spendere:", 14, ZTema.INCHIOSTRO, ZTema.testo_forte))
+	var meno := ZTema.pulsante("−", func(): magia_punti = maxi(0, magia_punti - 1); _aggiorna(), 15)
+	meno.disabled = magia_punti <= 0
+	rp.add_child(meno)
+	rp.add_child(ZTema.etichetta(str(magia_punti), 18, Color("6a3fa0"), ZTema.titolo))
+	var piu := ZTema.pulsante("+", func(): magia_punti = mini(prep, magia_punti + 1); _aggiorna(), 15)
+	piu.disabled = magia_punti >= prep
+	rp.add_child(piu)
+	box.add_child(rp)
+	for scuola in ["bianca", "nera"]:
+		box.add_child(ZTema.etichetta("Magia " + scuola, 12, ZTema.CUOIO, ZTema.testo_forte))
+		var g := GridContainer.new()
+		g.columns = 2
+		for k in ZRegole.MAGIE:
+			var m: Dictionary = ZRegole.MAGIE[k]
+			if m.scuola != scuola:
+				continue
+			var b := ZTema.pulsante("%s  %d+" % [m.nome, m.min], func(): magia_scelta = "" if magia_scelta == k else k; magia_h1 = Vector2i(-1, -1); _aggiorna(), 13)
+			b.toggle_mode = true
+			b.set_pressed_no_signal(magia_scelta == k)
+			b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			b.tooltip_text = m.testo
+			g.add_child(b)
+		box.add_child(g)
+	if magia_scelta != "":
+		var m: Dictionary = ZRegole.MAGIE[magia_scelta]
+		var probabilita := clampi(7 - (int(m.min) - magia_punti), 0, 6)
+		var d := ZTema.etichetta("%s — %s Riesce con %d su 6." % [m.nome, m.testo, probabilita], 13)
+		d.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		box.add_child(d)
+		var guida := {"frana": "Clicca un esagono di montagna.", "ponte": "Clicca la prima costa." if magia_h1.x < 0 else "Ora clicca la seconda costa (2-4 esagoni più in là).", "coraggio": "Clicca vicino alle tue unità ridotte.", "spada": "Clicca l'esagono dei tuoi pezzi.", "rinascita": "Clicca una tua città.", "odalische": "Clicca un Signore nemico.", "megadrago": "Clicca un esagono di terra libero.", "sonno": "Clicca l'esagono dei nemici.", "terremoto": "Clicca l'esagono dei nemici.", "voragine": "Clicca una città nemica."}
+		box.add_child(ZTema.etichetta(guida.get(magia_scelta, ""), 13, ZTema.VERDE.darkened(0.3), ZTema.testo_forte))
 
 func _legenda(box: VBoxContainer) -> void:
 	box.add_child(ZTema.titoletto("Il terreno", 16))
@@ -1030,7 +1189,7 @@ func _voce_vassoio(p: String, tipo: String, n: int, nome: String, azione: Callab
 	return b
 
 func _aggiorna_evidenziazioni() -> void:
-	tavolo.pulisci_evidenziazioni()
+	tavolo.pulisci_evidenziazioni(["varchi"])
 	tavolo.seleziona_pedine([])
 	for s in tavolo.citta.values():
 		s.seleziona(false)
@@ -1044,7 +1203,42 @@ func _aggiorna_evidenziazioni() -> void:
 		tavolo.citta[citta_sel].seleziona(true)
 	if not mio:
 		return
+	if passaggio_id >= 0:
+		var mete: Array = []
+		for ci in partita.citta:
+			if ci.p == p and ci.h[0] >= 0 and int(ci.id) != partita.pedine[passaggio_id].citta and ci.g.size() < ZRegole.MAX_GUARNIGIONE:
+				mete.append(partita.hex_citta(ci))
+		tavolo.evidenzia("basi", mete, Color(0.95, 0.8, 0.3, 0.6))
+		return
 	match partita.fase:
+		ZPartita.FASE_MAGIA:
+			var signori: Array = []
+			for u in partita.signori_magici(p):
+				signori.append(u.hex)
+			tavolo.evidenzia("gruppo", signori, Color(0.65, 0.45, 1.0, 0.45))
+			if magia_scelta != "" and not partita.magia_fatta:
+				var bersagli: Array = []
+				var visti := {}
+				for u in partita.signori_magici(p):
+					for v in partita._esagoni_entro(u.hex, ZRegole.RAGGIO_MAGIA):
+						if visti.has(v):
+							continue
+						visti[v] = true
+						var ok := false
+						if magia_scelta == "ponte":
+							if magia_h1.x < 0:
+								ok = partita.mappa.terra(v) and partita.mappa.costa(v)
+							else:
+								ok = partita.valuta_magia("ponte", magia_h1, [v.x, v.y]) == ""
+						elif magia_scelta in ["sonno", "terremoto", "spada", "coraggio"]:
+							ok = partita.valuta_magia(magia_scelta, v) == "" and not partita.pedine_in(v).is_empty()
+						else:
+							ok = partita.valuta_magia(magia_scelta, v) == ""
+						if ok:
+							bersagli.append(v)
+				tavolo.evidenzia("bersagli", bersagli, Color(0.6, 0.35, 0.95, 0.45))
+				if magia_h1.x >= 0:
+					tavolo.evidenzia("basi", [magia_h1], Color(0.7, 0.9, 1.0, 0.7))
 		ZPartita.FASE_SCHIERAMENTO:
 			var zone: Array = []
 			var colori := {}
@@ -1067,7 +1261,7 @@ func _aggiorna_evidenziazioni() -> void:
 						continue
 					if partita.fase == ZPartita.FASE_MOVIMENTO and partita.puo_muovere(u) == "":
 						liberi.append(u.hex)
-					elif partita.fase == ZPartita.FASE_SINGOLI and (partita.puo_attacco_singolo(u) == "" or partita.puo_muovere(u) == "" or (u.popolo == "Draghi" and u.tipo == "signore" and not u.agito)):
+					elif partita.fase == ZPartita.FASE_SINGOLI and (partita.puo_attacco_singolo(u) == "" or partita.puo_muovere(u) == "" or (u.popolo == "Draghi" and u.tipo == "signore" and not u.agito) or (partita.zl2() and partita.puo_trasformare(u) == "")):
 						liberi.append(u.hex)
 				tavolo.evidenzia("gruppo", liberi, Color(1, 0.95, 0.75, 0.3))
 				return
@@ -1145,8 +1339,10 @@ func _aggiorna_suggerimento() -> void:
 				t = "Schiera città, guarnigioni e armate sui tuoi continenti, poi conferma."
 			ZPartita.FASE_ALLEANZE:
 				t = "Proponi o tradisci alleanze nel pannello a destra, poi passa al movimento."
+			ZPartita.FASE_MAGIA:
+				t = "Magia: scegli un incantesimo e i punti di preparazione da spendere, poi clicca il bersaglio entro 10 esagoni da un tuo Signore (in viola). Oppure passa oltre e accumula un punto."
 			ZPartita.FASE_SINGOLI:
-				t = "Attacchi singoli, prima di ogni altro movimento: seleziona un Alato, un Falco o un Serpente e clicca un nemico in rosso. Il Signore Drago può fiammeggiare prima di muovere."
+				t = "Attacchi singoli, prima di ogni altro movimento: seleziona un Alato, un Falco, un Serpente o una Pantera e clicca un nemico in rosso. Il Signore Drago può fiammeggiare prima di muovere; le Donne-Pantera si trasformano ora."
 			ZPartita.FASE_MOVIMENTO:
 				t = "Seleziona un pezzo e clicca un esagono evidenziato; Maiusc+clic con un fante su un pezzo amico per fargli da scorta."
 				if sel_id >= 0 and partita.pedine[sel_id].scomparso:
@@ -1172,6 +1368,8 @@ const REGOLE := """[b]Scopo.[/b] L'Anno di Zargo dura 25 mesi: vince chi, alla f
 [b]Poteri.[/b] Signori Cavalieri: carica in linea retta (+3 frontale, +1 laterale). Maghi e Illusionisti: visioni entro 5 esagoni, che mettono in fuga. Fantarcieri: frecce in linea retta entro 8. Draghi e Lanciafiamme: fiamme entro 5 (i Draghi ne sono immuni). Alati, Falchi e Serpenti: attacchi singoli prima di ogni altro movimento; gli Alati volano sopra nemici, boschi e montagne. Signori Monaci: spariscono e ricompaiono la mossa successiva.
 
 [b]Città e scorte.[/b] Una città ospita fino a 4 pezzi coperti. Per assediarla servono almeno tanti pezzi quanti ne contiene la guarnigione; la guarnigione non può arretrare, quindi ogni esito favorevole all'attaccante conquista la città. Un fante può fare da scorta a un altro pezzo, subendo al suo posto gli attacchi.
+
+[b]Zargo's Lords 2.[/b] Con Amazzoni o Aracnidi in campo (o attivando l'opzione nel menu) ogni popolo ha 6 città e si possono impilare due pezzi dello stesso popolo. Chi arretra contro un ostacolo viene ridotto (girato, fermo e senza zona d'influenza) invece che eliminato: a fine mossa si recupera con 4+ se un proprio Signore è vicino. Le frecce partono in ogni direzione, +1 contro le pile. Amazzoni: arcieri a cavallo, Donne-Pantera che si trasformano all'inizio della mossa, fanti che diventano Pantere con un numero pari, Signora con il manto magico. Aracnidi: ragni che lasciano reti sul percorso, Reziari che lanciano la rete prima dello scontro, dardi del Signore. Regole opzionali: passaggi segreti fra le proprie città, magia (punti di preparazione e dieci incantesimi bianchi e neri), guerra lampo a punti.
 
 [b]Comandi.[/b] Tasto sinistro: seleziona e trascina il tavolo. Tasto destro: ruota la vista (clic: annulla la selezione). Rotella: zoom. G: reticolo. Invio: fase successiva."""
 
@@ -1201,7 +1399,7 @@ func _connetti(url: String, chiave: String, poi: Callable) -> void:
 	online.authenticated.connect(poi, CONNECT_ONE_SHOT)
 	online.authenticate_anonymously()
 
-func _crea_stanza(controllo: Dictionary, url: String, chiave: String) -> void:
+func _crea_stanza(controllo: Dictionary, opzioni: Dictionary, url: String, chiave: String) -> void:
 	if controllo.size() < 2:
 		menu.stato("Servono almeno due popoli in gioco.")
 		return
@@ -1220,7 +1418,7 @@ func _crea_stanza(controllo: Dictionary, url: String, chiave: String) -> void:
 					ctrl[p] = "ia"
 					posti[p] = "ia"
 		partita = ZPartita.new()
-		partita.nuova(ctrl.keys(), ctrl)
+		partita.nuova(ctrl.keys(), ctrl, 0, opzioni)
 		var codice := FirebaseOnline.generate_room_code()
 		online.room_created.connect(func(c, _d):
 			in_online = true
@@ -1236,11 +1434,11 @@ func _entra_stanza(codice: String, url: String, chiave: String) -> void:
 		online.room_joined.connect(func(c, d):
 			var p_posti: Dictionary = d.get("posti", {})
 			var scelto := ""
-			for p in ZRegole.POPOLI:
+			for p in ZRegole.POPOLI_ZL2:
 				if p_posti.get(p) == online.uid:
 					scelto = p
 			if scelto == "":
-				for p in ZRegole.POPOLI:
+				for p in ZRegole.POPOLI_ZL2:
 					if p_posti.get(p) == "libero":
 						scelto = p
 						break
