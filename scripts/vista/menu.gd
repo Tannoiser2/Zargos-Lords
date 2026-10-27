@@ -221,7 +221,7 @@ func _riga_opzioni() -> Control:
 	opz_zl2 = _interruttore("Regole di Zargo's Lords 2", "Sei città per popolo, pile di due pezzi, pezzi ridotti invece che eliminati contro gli ostacoli, frecce in ogni direzione.")
 	opz_zl2.toggled.connect(func(_on): _aggiorna_opzioni())
 	h.add_child(opz_zl2)
-	for k in [["magia", "Magia", "I Signori accumulano punti di preparazione e lanciano incantesimi."], ["passaggi", "Passaggi segreti", "Una volta per mossa un pezzo in guarnigione passa a un'altra città del suo popolo."], ["lampo", "Guerra lampo", "Le città conquistate vengono rase e danno punti: vince chi ne fa di più."]]:
+	for k in [["iniziativa", "Iniziativa", "Ogni mese l'ordine dei popoli si sorteggia; ogni fase (potere, movimento, combattimento) la giocano tutti prima di passare alla successiva."], ["magia", "Magia", "I Signori accumulano punti di preparazione e lanciano incantesimi."], ["passaggi", "Passaggi segreti", "Una volta per mossa un pezzo in guarnigione passa a un'altra città del suo popolo."], ["lampo", "Guerra lampo", "Le città conquistate vengono rase e danno punti: vince chi ne fa di più."]]:
 		var b := _interruttore(k[1], k[2])
 		opz[k[0]] = b
 		h.add_child(b)

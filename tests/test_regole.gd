@@ -343,6 +343,31 @@ func _init() -> void:
 	controlla(nem.muta > g.turno_globale and int(g.preparazione["Amazzoni"]) == 0, "le Odalische infami (3+) con 2 punti riescono sempre")
 	controlla(not g.esegui({"a": "magia", "s": "sonno", "h": [nem.hex.x, nem.hex.y]}).ok, "una sola magia per mossa")
 
+	print("Iniziativa e magia minore")
+	g = ZPartita.new()
+	g.nuova(["Cavalieri", "Draghi", "Amazzoni"], {"Cavalieri": "umano", "Draghi": "umano", "Amazzoni": "umano"}, 11, {"iniziativa": true, "magia": true})
+	for i in 3:
+		g.esegui({"a": "auto_schieramento"})
+		g.esegui({"a": "fine_schieramento"})
+	controlla(g.alternato() and g.ordine.size() == 3 and g.blocco == 0, "l'ordine d'iniziativa è sorteggiato (%s)" % ", ".join(g.ordine))
+	var primo: String = g.ordine[0]
+	var giri := 0
+	while g.blocco == 0 and giri < 20:
+		g.esegui({"a": "fase"})
+		giri += 1
+	controlla(g.blocco == 1 and g.popolo_di_mano() == primo and g.fase in [ZPartita.FASE_SINGOLI, ZPartita.FASE_MOVIMENTO], "dopo il potere di tutti muove per primo chi ha l'iniziativa")
+	var tg := g.turno_globale
+	while g.blocco == 1 and giri < 40:
+		g.esegui({"a": "fase"})
+		giri += 1
+	controlla(g.blocco == 2 and g.popolo_di_mano() == primo and g.turno_globale == tg, "poi tutti combattono, nello stesso mese")
+	g = partita_zl2()
+	p = pianura_aperta(g)
+	var arc := metti(g, "Amazzoni", "arciere", p)
+	controlla(g.gittata(arc) == 2, "con Zargo's Lords 2 la portata base dei tiri è 2")
+	metti(g, "Amazzoni", "signore", g.mappa.linea(p, 0, 1)[0])
+	controlla(g.gittata(arc) == 5, "accanto alla Signora le frecce incantate arrivano a 5")
+
 	print("Partita automatica e salvataggio")
 	g = ZPartita.new()
 	g.nuova(["Draghi", "Alati"], {"Draghi": "ia", "Alati": "ia"}, 99)

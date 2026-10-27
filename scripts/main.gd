@@ -410,7 +410,11 @@ func _effetto(e: Dictionary) -> void:
 			_deseleziona(false)
 			if _mio(e.p):
 				_inquadra_popolo(e.p)
-				hud.mostra_dado(0, "MOSSA %s" % ZRegole.degli(e.p).to_upper(), "Mese %d dell'Anno di Zargo. Tocca a te." % int(e.mese))
+				var titoli := ["FASE DEL POTERE", "FASE DI MOVIMENTO", "FASE DI COMBATTIMENTO"]
+				if e.has("blocco"):
+					hud.mostra_dado(0, "%s %s" % [titoli[int(e.blocco)], ZRegole.degli(e.p).to_upper()], "Mese %d dell'Anno di Zargo, ordine d'iniziativa: %s. Tocca a te." % [int(e.mese), ", ".join(partita.ordine)])
+				else:
+					hud.mostra_dado(0, "MOSSA %s" % ZRegole.degli(e.p).to_upper(), "Mese %d dell'Anno di Zargo. Tocca a te." % int(e.mese))
 		"fine":
 			_fine_partita()
 
@@ -594,7 +598,7 @@ func _clic_magia(h: Vector2i, u: ZPedina, ci: Dictionary) -> void:
 			magia_h1 = h
 			_aggiorna()
 		else:
-			_avviso("Scegli una costa entro 10 esagoni da un tuo Signore.")
+			_avviso("Scegli una costa entro 10 esagoni da un tuo incantatore (Signore, Mago o Illusionista).")
 		return
 	var az := {"a": "magia", "s": magia_scelta, "h": [h.x, h.y], "punti": magia_punti}
 	if magia_scelta == "ponte":
@@ -797,6 +801,8 @@ func _aggiorna() -> void:
 			hud.lbl_fase.text = ""
 		_:
 			hud.lbl_turno.text = "MOSSA %s" % ZRegole.degli(p).to_upper()
+			if partita.alternato():
+				hud.lbl_turno.text = "%s %s" % [["POTERE", "MOVIMENTO", "COMBATTIMENTO"][clampi(partita.blocco, 0, 2)], ZRegole.degli(p).to_upper()]
 			var nomi := {"alleanze": "ALLEANZE", "magia": "MAGIA", "singoli": "ATTACCHI SINGOLI", "movimento": "MOVIMENTO", "lanci": "LANCI", "combattimento": "CORPO A CORPO"}
 			var ordine := ["alleanze", "magia", "singoli", "movimento", "lanci", "combattimento"]
 			if not partita.opzione("magia"):
@@ -823,7 +829,8 @@ func _aggiorna() -> void:
 func _aggiorna_popoli() -> void:
 	for c in hud.box_popoli.get_children():
 		c.queue_free()
-	for p in partita.popoli:
+	var elenco: Array = partita.ordine if partita.alternato() else partita.popoli
+	for p: String in elenco:
 		var riga := HBoxContainer.new()
 		riga.add_theme_constant_override("separation", 8)
 		var g := ZWidget.Gettone.new(ZRegole.COLORI[p], 16)
@@ -1032,7 +1039,7 @@ func _pannello_magia(box: VBoxContainer) -> void:
 	if partita.magia_fatta:
 		box.add_child(ZTema.etichetta("Hai già fatto la tua magia in questa mossa.", 13, ZTema.CUOIO))
 		return
-	var info := ZTema.etichetta("Preparazione: %d punti (si accumula un punto per mossa senza magie, massimo %d). Il dado più i punti spesi deve raggiungere il minimo dell'incantesimo; il bersaglio dev'essere entro %d esagoni da un tuo Signore." % [prep, ZRegole.MAX_PREPARAZIONE, ZRegole.RAGGIO_MAGIA], 13)
+	var info := ZTema.etichetta("Preparazione: %d punti (si accumula un punto per mossa senza magie, massimo %d). Il dado più i punti spesi deve raggiungere il minimo dell'incantesimo; il bersaglio dev'essere entro %d esagoni da un tuo incantatore (Signore, Mago o Illusionista)." % [prep, ZRegole.MAX_PREPARAZIONE, ZRegole.RAGGIO_MAGIA], 13)
 	info.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	box.add_child(info)
 	magia_punti = clampi(magia_punti, 0, prep)
@@ -1363,7 +1370,7 @@ func _aggiorna_suggerimento() -> void:
 			ZPartita.FASE_ALLEANZE:
 				t = "Proponi o tradisci alleanze nel pannello a destra, poi passa al movimento."
 			ZPartita.FASE_MAGIA:
-				t = "Magia: scegli un incantesimo e i punti di preparazione da spendere, poi clicca il bersaglio entro 10 esagoni da un tuo Signore (in viola). Oppure passa oltre e accumula un punto."
+				t = "Magia: scegli un incantesimo e i punti di preparazione da spendere, poi clicca il bersaglio entro 10 esagoni da un tuo incantatore (Signore, Mago o Illusionista) (in viola). Oppure passa oltre e accumula un punto."
 			ZPartita.FASE_SINGOLI:
 				t = "Attacchi singoli, prima di ogni altro movimento: seleziona un Alato, un Falco, un Serpente o una Pantera e clicca un nemico in rosso. Il Signore Drago può fiammeggiare prima di muovere; le Donne-Pantera si trasformano ora."
 			ZPartita.FASE_MOVIMENTO:
@@ -1392,7 +1399,7 @@ const REGOLE := """[b]Scopo.[/b] L'Anno di Zargo dura 25 mesi: vince chi, alla f
 
 [b]Città e scorte.[/b] Una città ospita fino a 4 pezzi coperti. Per assediarla servono almeno tanti pezzi quanti ne contiene la guarnigione; la guarnigione non può arretrare, quindi ogni esito favorevole all'attaccante conquista la città. Un fante può fare da scorta a un altro pezzo, subendo al suo posto gli attacchi.
 
-[b]Zargo's Lords 2.[/b] Con Amazzoni o Aracnidi in campo (o attivando l'opzione nel menu) ogni popolo ha 6 città e si possono impilare due pezzi dello stesso popolo. Chi arretra contro un ostacolo viene ridotto (girato, fermo e senza zona d'influenza) invece che eliminato: a fine mossa si recupera con 4+ se un proprio Signore è vicino. Le frecce partono in ogni direzione, +1 contro le pile. Amazzoni: arcieri a cavallo, Donne-Pantera che si trasformano all'inizio della mossa, fanti che diventano Pantere con un numero pari, Signora con il manto magico. Aracnidi: ragni che lasciano reti sul percorso, Reziari che lanciano la rete prima dello scontro, dardi del Signore. Regole opzionali: passaggi segreti fra le proprie città, magia (punti di preparazione e dieci incantesimi bianchi e neri), guerra lampo a punti.
+[b]Zargo's Lords 2.[/b] Con Amazzoni o Aracnidi in campo (o attivando l'opzione nel menu) ogni popolo ha 6 città e si possono impilare due pezzi dello stesso popolo. Chi arretra contro un ostacolo viene ridotto (girato, fermo e senza zona d'influenza) invece che eliminato: a fine mossa si recupera con 4+ se un proprio Signore è vicino. Le frecce partono in ogni direzione, +1 contro le pile. Amazzoni: arcieri a cavallo, Donne-Pantera che si trasformano all'inizio della mossa, fanti che diventano Pantere con un numero pari, Signora con il manto magico. Aracnidi: ragni che lasciano reti sul percorso, Reziari che lanciano la rete prima dello scontro, dardi del Signore. Con l'espansione i tiri arrivano a 2 esagoni, a 8 (frecce) o 5 (arciere a cavallo, lanciafiamme) se il tiratore è accanto a un incantatore: Signori, Maghi e Illusionisti. Regole opzionali: iniziativa (ordine sorteggiato ogni mese e fasi giocate a turno da tutti), passaggi segreti fra le proprie città, magia (punti di preparazione e dieci incantesimi bianchi e neri), guerra lampo a punti.
 
 [b]Comandi.[/b] Tasto sinistro: seleziona e trascina il tavolo. Tasto destro: ruota la vista (clic: annulla la selezione). Rotella: zoom. G: reticolo. Invio: fase successiva."""
 

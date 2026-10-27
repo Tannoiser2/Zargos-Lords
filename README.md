@@ -32,7 +32,9 @@ Pubblicazione: https://tannoiser2.github.io/Zargos-Lords/
   - Amazzoni: Signora con il manto magico (ignora blocchi e zone d'influenza), Donne-Pantera che diventano Pantere (12/10), arcieri a cavallo con una propria tabella, fanti che si trasformano in Pantere con un numero pari (al massimo due tentativi per mossa);
   - Aracnidi: ragni che lasciano fino a tre reti sul percorso (chi ci entra si ferma), Reziari che lanciano la rete prima dello scontro (4-5 cattura, 6 elimina), dardi del Signore;
   - sei città per popolo, pile di due pezzi dello stesso popolo, pezzi ridotti invece che eliminati contro gli ostacoli e recuperati a fine mossa (sul tavolo diventano grigi, pedina e miniatura), frecce in ogni direzione con +1 contro le pile;
-  - regole opzionali: passaggi segreti fra le proprie città, magia (fase propria, punti di preparazione fino a 4, dieci incantesimi entro 10 esagoni da un Signore), guerra lampo (città rase al suolo e punti vittoria).
+  - magia minore: Frecce incantate (portata 8 per i Fantarcieri e 5 per le Arciere a cavallo accanto a un incantatore, altrimenti 2), Pioggia di fiamme dei Signori Draghi (Lanciafiamme a 5 accanto a un Signore), visioni e dardi a 5;
+  - incantatori: Signori, Maghi e Monaci Illusionisti lanciano la magia e possono essere colpiti dalle Odalische infami;
+  - regole opzionali: iniziativa (ordine dei popoli sorteggiato ogni mese, ogni fase giocata da tutti prima della successiva: potere, movimento, combattimento), passaggi segreti fra le proprie città, magia (fase propria, punti di preparazione fino a 4, dieci incantesimi entro 10 esagoni da un Signore), guerra lampo (città rase al suolo e punti vittoria).
 - **Tabelle verificate sulle fotografie delle ruote** (`docs/original/wheels`): combattimento, frecce, fiamme, visioni, e il numero di frecce o vampe necessario per eliminare ogni pezzo, stampato sul retro delle ruote.
 - **Mappa logica ricostruita esagono per esagono** dalla mappa del modulo Tabletop Simulator (`assets/board/mappa.png`), in `assets/data/board.json`:
   - reticolo 66 × 53;

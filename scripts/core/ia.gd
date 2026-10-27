@@ -10,9 +10,9 @@ var _campo := {}            # distanza (via terra) dall'obiettivo più vicino
 var _tentativi := 0
 
 func _reset_se_serve(g: ZPartita) -> void:
-	if g.turno_globale != _turno_visto or g.fase != _fase_vista:
+	if g.turno_globale != _turno_visto or g.fase + g.popolo_di_mano() != _fase_vista:
 		_turno_visto = g.turno_globale
-		_fase_vista = g.fase
+		_fase_vista = g.fase + g.popolo_di_mano()
 		_fatti.clear()
 		_tentativi = 0
 		_campo.clear()

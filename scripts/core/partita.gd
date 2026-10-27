@@ -47,6 +47,9 @@ var bonus_vittoria := {}                 # popolo -> punti extra (Voragine di fi
 var conquiste_lampo := {}                # popolo -> [popolo della città conquistata...]
 var punti_lampo := {}                    # popolo -> punti per le città conquistate
 var n_conquiste := 0
+# --- Iniziativa e fasi alternate (Zargo's Lords 2) ---
+var ordine: Array[String] = []           # ordine d'iniziativa del mese
+var blocco := 0                          # 0 potere, 1 movimento, 2 combattimento
 
 var _indice := {}
 var _indice_valido := false
@@ -63,7 +66,7 @@ func _init() -> void:
 ## carte dei popoli: con due giocatori ognuno riceve due continenti.
 func nuova(scelti: Array, ctrl: Dictionary, seme := 0, opz := {}) -> void:
 	rng.seed = seme if seme != 0 else randi()
-	opzioni = {"zl2": false, "magia": false, "passaggi": false, "lampo": false}
+	opzioni = {"zl2": false, "magia": false, "passaggi": false, "lampo": false, "iniziativa": false}
 	opzioni.merge(opz, true)
 	# I popoli dell'espansione richiedono le regole di Zargo's Lords 2.
 	for x in scelti:
@@ -113,6 +116,8 @@ func nuova(scelti: Array, ctrl: Dictionary, seme := 0, opz := {}) -> void:
 	conquiste_lampo.clear()
 	punti_lampo.clear()
 	n_conquiste = 0
+	ordine.clear()
+	blocco = 0
 	terreno_mod.clear()
 	ponti_temp.clear()
 	reti.clear()
@@ -170,7 +175,14 @@ func valore(u: ZPedina) -> int:
 	return u.c() * (2 if u.spada == turno_globale else 1)
 
 func popolo_di_mano() -> String:
+	if alternato():
+		return ordine[turno] if turno < ordine.size() else ""
 	return popoli[turno] if turno < popoli.size() else ""
+
+## Regola dell'iniziativa: ogni mese l'ordine si sorteggia e ogni fase
+## (potere, movimento, combattimento) la giocano tutti prima della successiva.
+func alternato() -> bool:
+	return opzione("iniziativa") and fase != FASE_SCHIERAMENTO and not ordine.is_empty()
 
 func continenti_di(p: String) -> Array[int]:
 	var out: Array[int] = []
@@ -990,10 +1002,37 @@ func tipo_tiro(u: ZPedina) -> String:
 	return ""
 
 func gittata(u: ZPedina) -> int:
-	match tipo_tiro(u):
+	var t := tipo_tiro(u)
+	if zl2():
+		# Zargo's Lords 2: portata base 2; la magia minore la allunga.
+		match t:
+			"frecce": return 8 if accanto_a_incantatore(u) else 2
+			"cavallo": return 5 if accanto_a_incantatore(u) else 2
+			"fiamme":
+				if u.tipo == "signore":
+					return 5
+				return 5 if accanto_a_incantatore(u, ["signore"]) else 2
+			"visione", "dardi": return 5
+		return 0
+	match t:
 		"frecce": return 8
 		"fiamme", "visione", "cavallo", "dardi": return 5
 	return 0
+
+## Tipi di pezzo che praticano la magia (Signori, Maghi, Monaci Illusionisti).
+const INCANTATORI := ["signore", "mago", "illusionista"]
+
+func incantatore(u: ZPedina) -> bool:
+	return u.tipo in INCANTATORI
+
+## Magia minore (Frecce incantate, Pioggia di fiamme): il tiratore deve stare
+## nella zona d'influenza di un incantatore attivo del suo popolo.
+func accanto_a_incantatore(u: ZPedina, tipi: Array = INCANTATORI) -> bool:
+	for v in mappa.vicino_geometrico_tutti(u.hex):
+		for w in pedine_in(v):
+			if w.popolo == u.popolo and w.tipo in tipi and w.attivo() and w.muta < turno_globale:
+				return true
+	return false
 
 func valuta_tiro(u: ZPedina, b: ZPedina) -> Dictionary:
 	var tipo := tipo_tiro(u)
@@ -1487,7 +1526,10 @@ func _fine_schieramento(eventi: Array) -> String:
 	if turno >= popoli.size():
 		turno = 0
 		_log("Schieramento concluso. Ora si possono discutere le prime alleanze.")
-		_inizia_turno(eventi)
+		if opzione("iniziativa"):
+			_inizia_mese(eventi)
+		else:
+			_inizia_turno(eventi)
 	return ""
 
 # --- Alleanze --------------------------------------------------------------
@@ -1692,7 +1734,7 @@ func _passaggio(u: ZPedina, cid: int, eventi: Array) -> String:
 func signori_magici(p: String) -> Array[ZPedina]:
 	var out: Array[ZPedina] = []
 	for u in pedine:
-		if u.popolo == p and u.tipo == "signore" and u.viva and u.schierata and not u.scomparso and not u.ridotta and u.muta < turno_globale:
+		if u.popolo == p and incantatore(u) and u.viva and u.schierata and not u.scomparso and not u.ridotta and u.muta < turno_globale:
 			out.append(u)
 	return out
 
@@ -1730,7 +1772,7 @@ func valuta_magia(s: String, h: Vector2i, h2 = null) -> String:
 		return "Una sola magia per mossa."
 	var p := popolo_di_mano()
 	if not entro_raggio_magia(p, h):
-		return "Il bersaglio deve essere entro 10 esagoni da un tuo Signore."
+		return "Il bersaglio deve essere entro 10 esagoni da un tuo incantatore (Signore, Mago o Illusionista)."
 	match s:
 		"frana":
 			if terreno(h) != ZMappa.T.MONTAGNA:
@@ -1760,10 +1802,10 @@ func valuta_magia(s: String, h: Vector2i, h2 = null) -> String:
 		"odalische":
 			var ok := false
 			for w in pedine_in(h):
-				if nemici(w.popolo, p) and w.tipo == "signore":
+				if nemici(w.popolo, p) and incantatore(w):
 					ok = true
 			if not ok:
-				return "Scegli un Signore nemico."
+				return "Scegli un incantatore nemico (Signore, Mago o Illusionista)."
 	return ""
 
 func _magia(s: String, h: Vector2i, h2, punti: int, eventi: Array) -> String:
@@ -1829,10 +1871,10 @@ func _magia(s: String, h: Vector2i, h2, punti: int, eventi: Array) -> String:
 							break
 				_log("Un Signore %s rinasce." % ZRegole.degli(p))
 		"odalische":
-			var lord := pedine.filter(func(u): return u.viva and u.tipo == "signore" and nemici(u.popolo, p) and u.in_campo())
+			var lord := pedine.filter(func(u): return u.viva and incantatore(u) and nemici(u.popolo, p) and u.in_campo())
 			lord.sort_custom(func(a, b): return mappa.distanza(a.hex, h) < mappa.distanza(b.hex, h))
 			for u in lord.slice(0, 1 + extra):
-				u.muta = turno_globale + popoli.size()
+				u.muta = turno_globale + (1 if alternato() else popoli.size())
 		"megadrago":
 			var posti: Array[Vector2i] = [h]
 			for v in mappa.vicini_terra(h):
@@ -1881,6 +1923,9 @@ func _magia(s: String, h: Vector2i, h2, punti: int, eventi: Array) -> String:
 # --- Avanzamento dei turni -----------------------------------------------------
 
 func _avanza_fase(eventi: Array) -> String:
+	if alternato():
+		_avanza_alternato(eventi)
+		return ""
 	match fase:
 		FASE_SCHIERAMENTO:
 			return _fine_schieramento(eventi)
@@ -1908,6 +1953,9 @@ func _entra_in_fase(f: String, eventi: Array) -> void:
 	if f == FASE_MAGIA and not puo_fare_magia():
 		if not magia_fatta:
 			preparazione[popolo_di_mano()] = mini(ZRegole.MAX_PREPARAZIONE, int(preparazione.get(popolo_di_mano(), 0)) + 1)
+		if alternato():
+			_fine_attivazione(eventi)
+			return
 		fase = FASE_SINGOLI
 		f = FASE_SINGOLI
 	if f == FASE_SINGOLI and not ha_azioni_singole():
@@ -2010,9 +2058,117 @@ func _fine_turno(eventi: Array) -> void:
 		mese += 1
 	_inizia_turno(eventi)
 
+# --- Iniziativa e fasi alternate ------------------------------------------------
+
+func _avanza_alternato(eventi: Array) -> void:
+	match fase:
+		FASE_ALLEANZE:
+			if opzione("magia"):
+				_entra_in_fase(FASE_MAGIA, eventi)
+			else:
+				_fine_attivazione(eventi)
+		FASE_MAGIA:
+			if not magia_fatta:
+				preparazione[popolo_di_mano()] = mini(ZRegole.MAX_PREPARAZIONE, int(preparazione.get(popolo_di_mano(), 0)) + 1)
+				_log("%s accumulano un punto di preparazione magica (%d)." % [ZRegole.Gli(popolo_di_mano()), preparazione[popolo_di_mano()]])
+			_fine_attivazione(eventi)
+		FASE_SINGOLI:
+			_entra_in_fase(FASE_MOVIMENTO, eventi)
+		FASE_MOVIMENTO:
+			_chiudi_movimento(eventi)
+			_fine_attivazione(eventi)
+		FASE_LANCI:
+			_entra_in_fase(FASE_COMBATTIMENTO, eventi)
+		FASE_COMBATTIMENTO:
+			_recupera_ridotti(eventi)
+			_fine_attivazione(eventi)
+
+## Inizio del mese con l'iniziativa: si sorteggia l'ordine dei popoli.
+func _inizia_mese(eventi: Array) -> void:
+	turno_globale += 1
+	ordine.assign(popoli.duplicate())
+	_mescola(ordine)
+	blocco = 0
+	turno = 0
+	for u in pedine:
+		u.mosso = false
+		u.agito = false
+		u.singolo = false
+		u.residuo = 0
+		u.scorta_cambiata = false
+		u.carica_dir = -1
+		if u.paralisi > 0:
+			u.paralisi -= 1
+	_log("— Mese %d dell'Anno di Zargo — iniziativa: %s" % [mese, ", ".join(ordine)])
+	fase = FASE_ALLEANZE
+	_attiva(eventi)
+
+## Il popolo di mano comincia la sua parte della fase corrente.
+func _attiva(eventi: Array) -> void:
+	var p := popolo_di_mano()
+	if pedine_di(p).filter(func(u): return u.tipo != "megadrago").is_empty() and citta_di(p) == 0:
+		_fine_attivazione(eventi)
+		return
+	match blocco:
+		0:
+			magia_fatta = false
+			proposte.assign(proposte.filter(func(k): return not k.begins_with(p + ">")))
+			eventi.append({"t": "turno", "p": p, "mese": mese, "blocco": 0})
+			_log("Fase del potere: %s." % ZRegole.gli(p))
+			if popoli.size() >= 3:
+				fase = FASE_ALLEANZE
+				eventi.append({"t": "fase", "fase": fase})
+			elif opzione("magia"):
+				_entra_in_fase(FASE_MAGIA, eventi)
+			else:
+				_fine_attivazione(eventi)
+		1:
+			passaggio_usato = false
+			trasformazioni = 0
+			singoli_aperti = true
+			if p == "Amazzoni":
+				for u in pedine:
+					if u.popolo == p and u.pantera() and u.origine != "":
+						u.tipo = u.origine
+						u.origine = ""
+						u.trasformata = turno_globale
+						if u.viva:
+							eventi.append({"t": "trasforma", "u": u.id})
+			eventi.append({"t": "turno", "p": p, "mese": mese, "blocco": 1})
+			_log("Fase di movimento: %s." % ZRegole.gli(p))
+			_entra_in_fase(FASE_SINGOLI, eventi)
+		2:
+			mischia_iniziata = false
+			for u in pedine:
+				u.colpi = 0
+				u.ingaggiata = false
+			eventi.append({"t": "turno", "p": p, "mese": mese, "blocco": 2})
+			_log("Fase di combattimento: %s." % ZRegole.gli(p))
+			_entra_in_fase(FASE_LANCI, eventi)
+	_sporca()
+
+func _fine_attivazione(eventi: Array) -> void:
+	turno += 1
+	if turno >= ordine.size():
+		turno = 0
+		blocco += 1
+		if blocco > 2:
+			_pulizia_fine_mossa(eventi)
+			if mese >= mesi_totali():
+				_termina(eventi)
+				return
+			mese += 1
+			_inizia_mese(eventi)
+			return
+	_attiva(eventi)
+
 ## Fine della mossa del popolo di mano: recupero dei pezzi ridotti, reti,
 ## mega draghi ed effetti magici che valgono "per questa mossa".
 func _chiudi_mossa(eventi: Array) -> void:
+	_recupera_ridotti(eventi)
+	_pulizia_fine_mossa(eventi)
+
+func _recupera_ridotti(eventi: Array) -> void:
 	var p := popolo_di_mano()
 	if zl2():
 		for u in pedine:
@@ -2034,13 +2190,16 @@ func _chiudi_mossa(eventi: Array) -> void:
 			elif d == 1 or u.tipo == "signore":
 				_log("%s %s non si riprende (dado %d) ed è perduto." % [u.nome(), ZRegole.degli(p), d])
 				_elimina(u, "", eventi)
+	if p == "Aracnidi" and not reti.is_empty():
+		reti.clear()
+		eventi.append({"t": "reti"})
+	_sporca()
+
+func _pulizia_fine_mossa(eventi: Array) -> void:
 	for u in pedine:
 		if u.tipo == "megadrago" and u.viva:
 			u.viva = false
 			eventi.append({"t": "elimina", "u": u.id})
-	if p == "Aracnidi" and not reti.is_empty():
-		reti.clear()
-		eventi.append({"t": "reti"})
 	terreno_mod.clear()
 	if not ponti_temp.is_empty():
 		ponti_temp.clear()
@@ -2174,6 +2333,7 @@ func a_dict() -> Dictionary:
 		"opz": opzioni, "prep": preparazione, "mf": magia_fatta, "tm": terreno_mod, "pt": ponti_temp,
 		"reti": reti, "pu": passaggio_usato, "tra": trasformazioni, "bv": bonus_vittoria,
 		"cl": conquiste_lampo, "pl": punti_lampo, "nc": n_conquiste,
+		"ord": ordine, "bl": blocco,
 	}
 
 func da_dict(d: Dictionary) -> void:
@@ -2221,6 +2381,8 @@ func da_dict(d: Dictionary) -> void:
 			conquiste_lampo[p2] = []
 	punti_lampo = d.get("pl", {}).duplicate()
 	n_conquiste = int(d.get("nc", 0))
+	ordine.assign(d.get("ord", []))
+	blocco = int(d.get("bl", 0))
 	rng.seed = int(String(d.seme))
 	rng.state = int(String(d.stato))
 	_sporca()

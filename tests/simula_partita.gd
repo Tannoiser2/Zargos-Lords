@@ -8,7 +8,7 @@ func _init() -> void:
 	var g := ZPartita.new()
 	var lista: Array = ZRegole.POPOLI_ZL2.duplicate() if OS.get_environment("ZL2") != "" else ZRegole.POPOLI.duplicate()
 	var scelti: Array = lista.slice(lista.size() - giocatori) if OS.get_environment("ZL2") != "" else lista.slice(0, giocatori)
-	var opz := {"zl2": OS.get_environment("ZL2") != "", "magia": OS.get_environment("MAGIA") != "", "passaggi": true, "lampo": OS.get_environment("LAMPO") != ""}
+	var opz := {"zl2": OS.get_environment("ZL2") != "", "magia": OS.get_environment("MAGIA") != "", "passaggi": true, "lampo": OS.get_environment("LAMPO") != "", "iniziativa": OS.get_environment("INIZIATIVA") != ""}
 	var ctrl := {}
 	for p in scelti:
 		ctrl[p] = "ia"
