@@ -717,7 +717,7 @@ func _magia(g: ZPartita) -> Dictionary:
 		if float(o[0]) > float(migliore[0]) and g.valuta_magia(o[1], o[2]) == "":
 			migliore = o
 	# Con pochi punti si lancia solo un colpo molto conveniente; altrimenti si accumula.
-	var soglia := 8.0 if prep < ZRegole.MAX_PREPARAZIONE else 3.0
+	var soglia := 12.0 if prep < ZRegole.MAX_PREPARAZIONE else 3.0
 	if migliore[1] == "" or float(migliore[0]) < soglia:
 		return {"a": "fase"}
 	var h: Vector2i = migliore[2]

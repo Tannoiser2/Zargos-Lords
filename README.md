@@ -54,7 +54,13 @@ Pubblicazione: https://tannoiser2.github.io/Zargos-Lords/
   - animazioni di frecce, fiamme e visioni;
   - telecamera orbitale.
 - **Animazioni dei lanci**: il tiratore si volta verso il bersaglio, poi partono raffiche di frecce in arco, sciami di braci per le fiamme o anelli spettrali per le visioni; il bersaglio sussulta. I Signori Monaci svaniscono e ricompaiono in una nuvola di fumo dorato.
-- **Intelligenza artificiale**: diplomazia, attacchi singoli, movimento verso le città nemiche, tiri, assedi e scontri valutati sulle probabilità della ruota.
+- **Intelligenza artificiale** (`scripts/core/ia.gd`): a ogni mossa prepara un piano:
+  - mappa della minaccia nemica (chi può raggiungere ogni esagono);
+  - difesa delle proprie città in pericolo, con i pezzi più vicini mandati in guarnigione (e i passaggi segreti, se attivi);
+  - obiettivi d'attacco pesati (città sguarnite o deboli, forze radunabili, finale di partita);
+  - avanzata senza esporre pezzi isolati, raduno attorno ai nemici da attaccare, scontri e assedi valutati sulle probabilità della ruota;
+  - alleanze ragionate (una proposta ogni quattro mesi, tradimento del capofila o nel finale), magie scelte per valore atteso.
+  `tests/torneo_ia.gd` mette a confronto la IA attuale con quella precedente (`tests/ia/`): contro la prima versione vince 7 partite su 8 nel gioco base e 4 su 4 con Zargo's Lords 2.
 - **Partita online** tramite Firebase (autenticazione anonima e Realtime Database), con posti assegnati per popolo.
 - **Salvataggio automatico** della partita locale dopo ogni azione.
 

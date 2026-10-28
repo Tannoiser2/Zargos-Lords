@@ -39,6 +39,8 @@ func _init() -> void:
 					combattimenti += 1
 				if e.t in ["magia", "trasforma", "rete", "reti", "ridotta", "recupero"]:
 					speciali[e.t] = speciali.get(e.t, 0) + 1
+					if e.t == "magia" and OS.get_environment("DEBUG") != "":
+						print("MAGIA ", e)
 					if e.t == "magia":
 						speciali[e.s + ("_ok" if e.ok else "_ko")] = speciali.get(e.s + ("_ok" if e.ok else "_ko"), 0) + 1
 		var errore_pila := controlla_pile(g)
