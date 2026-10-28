@@ -4,7 +4,7 @@ extends SceneTree
 ## Uso: PARTITE=8 GIOCATORI=4 godot --headless --script res://tests/torneo_ia.gd
 
 func _init() -> void:
-	var Base = load("res://tests/ia/ia_base.gd")
+	var Base = load(OS.get_environment("BASE") if OS.get_environment("BASE") != "" else "res://tests/ia/ia_v2.gd")
 	var partite := int(OS.get_environment("PARTITE")) if OS.get_environment("PARTITE") != "" else 6
 	var giocatori := int(OS.get_environment("GIOCATORI")) if OS.get_environment("GIOCATORI") != "" else 4
 	var zl2 := OS.get_environment("ZL2") != ""
@@ -23,6 +23,8 @@ func _init() -> void:
 		for i in scelti.size():
 			var nuova := (i + k) % 2 == 0
 			chi[scelti[i]] = ZIA.new() if nuova else Base.new()
+			if nuova and OS.get_environment("PARAM") != "":
+				chi[scelti[i]].par.merge(JSON.parse_string(OS.get_environment("PARAM")), true)
 			nuovi[scelti[i]] = nuova
 		var n := 0
 		var t0 := Time.get_ticks_msec()

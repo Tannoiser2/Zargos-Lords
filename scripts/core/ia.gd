@@ -23,7 +23,9 @@ var _difesa := {}           # id città propria -> forza che manca per difenderl
 var _difensori := {}        # id pedina -> id città da difendere
 var _vicinanza := {}        # esagono -> distanza dal nemico attivo più vicino
 var _ultima_proposta := {}  # popolo -> mese dell'ultima proposta fatta
-static var _dist_terra := {}  # esagono -> {esagono: passi via terra} (entro 16)
+static var _dist_terra := {}
+## Parametri di gioco (tarati con tests/torneo_ia.gd).
+var par := {"rischio": 1.0, "attacco": 2.5, "soglia": 0.25, "guarnigione": 2, "unione": 0.08, "difesa": 0.7}  # esagono -> {esagono: passi via terra} (entro 16)
 
 func _reset_se_serve(g: ZPartita) -> void:
 	var chiave := g.fase + g.popolo_di_mano()
@@ -153,7 +155,7 @@ func _prepara_piano(g: ZPartita) -> void:
 		for id in ci.g:
 			guarnigione += g.pedine[id].c()
 		# Una guarnigione di N pezzi richiede almeno N assedianti: più pezzi, più sicura.
-		var manca: float = minaccia * 0.7 - guarnigione - ci.g.size() * 3.0
+		var manca: float = minaccia * float(par.difesa) - guarnigione - ci.g.size() * 3.0
 		if ci.g.size() < ZRegole.MAX_GUARNIGIONE and manca > 0.0:
 			_difesa[int(ci.id)] = manca
 	if not _difesa.is_empty():
@@ -189,6 +191,8 @@ func _prepara_piano(g: ZPartita) -> void:
 		# Le città dove si possono radunare più forze sono più vicine "di fatto".
 		costo -= minf(vicine / 10.0, 4.0)
 		costo += float(_minaccia.get(hc, 0.0)) / 15.0
+		if g.mese >= g.mesi_totali() - 3:
+			costo -= 3.0   # nel finale contano solo le città
 		sorgenti[hc] = maxf(costo, 0.0)
 	for u in g.pedine:
 		if u.attivo() and g.nemici(u.popolo, io) and not sorgenti.has(u.hex):
@@ -421,7 +425,7 @@ func _movimento_ordinario(g: ZPartita) -> Dictionary:
 	if u.citta >= 0:
 		var ci: Dictionary = g.citta[u.citta]
 		var tranquilla := float(_minaccia.get(g.hex_citta(ci), 0.0)) <= 0.0
-		if ci.g.size() <= 2 or not tranquilla or u.tipo in ["mago", "illusionista"]:
+		if ci.g.size() <= int(par.guarnigione) or not tranquilla or u.tipo in ["mago", "illusionista"]:
 			return _movimento(g)
 		# Esce chi vale di più in campo, non i fanti.
 		var minimo := 999
@@ -492,13 +496,13 @@ func _punteggio(g: ZPartita, u: ZPedina, h: Vector2i) -> float:
 			var pr := ZRegole.probabilita(diff)
 			var ev: float = (pr.DE * _valore(b) + pr.D * 0.4 * _valore(b) - pr.AE * _valore(u) * 1.5 - pr.A * 0.35 * _valore(u)) / 6.0
 			meglio = maxf(meglio, ev)
-		s = _distanza_obiettivo(h) * 0.3 - meglio * 2.5 + _rischio(g, u, h) * 0.6
+		s = _distanza_obiettivo(h) * 0.3 - meglio * float(par.attacco) + _rischio(g, u, h) * 0.6 * float(par.rischio)
 		if meglio < 0.0:
 			s += 10.0
 	else:
-		s += _rischio(g, u, h)
+		s += _rischio(g, u, h) * float(par.rischio)
 	# Restare uniti: un piccolo premio per i compagni vicini.
-	s -= minf(_sostegno(g, u, h), 12.0) * 0.08
+	s -= minf(_sostegno(g, u, h), 12.0) * float(par.unione)
 	s -= g.bonus_terreno_hex(h) * 0.3
 	if g.zl2() and g.ha_rete(h) and io != "Aracnidi":
 		s += 6.0
@@ -599,13 +603,31 @@ func _combattimento(g: ZPartita) -> Dictionary:
 					att.append(w.id)
 					forza += g.valore(w) + g.bonus_maghi(w)
 		var n: int = ci.g.size()
-		if att.size() >= maxi(1, n) and forza >= n * 5 + 3:
+		if att.size() < maxi(1, n):
+			continue
+		# La guarnigione è coperta: si stima dal valore medio dei pezzi di quel popolo.
+		var media := 4.0
+		var tot := 0.0
+		var cnt := 0
+		for w in g.pedine:
+			if w.popolo == ci.p and w.viva and w.tipo != "signore":
+				tot += w.c()
+				cnt += 1
+		if cnt > 0:
+			media = tot / cnt
+		var pr := ZRegole.probabilita(forza - int(round(media * n)))
+		var valore_att := 0.0
+		for id in att:
+			valore_att += _valore(g.pedine[id])
+		var premio := 14.0 + media * n + (6.0 if g.mese >= g.mesi_totali() - 2 else 0.0)
+		var ev: float = ((pr.D + pr.DE) * premio - pr.AE * valore_att - pr.A * 0.25 * valore_att) / 6.0
+		if n == 0 or ev > 1.0:
 			_fatti[5000 + int(ci.id)] = true
 			return {"a": "assedio", "att": att, "c": ci.id}
 	# Scontri: per ogni nemico si sceglie il gruppo d'attacco che conviene di più.
 	# Si comincia dai pezzi più deboli o già colpiti, che è più facile eliminare.
 	var miglior := {}
-	var mv := 0.25
+	var mv: float = par.soglia
 	for b in g.pedine:
 		if not g.attaccabile(b) or not g.nemici(b.popolo, io) or _fatti.has(4000 + b.id):
 			continue
